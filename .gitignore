@@ -1,0 +1,37 @@
+# Build artifacts
+/build/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+/_deps/
+*.cmake.in
+Makefile
+*_include.cmake
+*_tests.cmake
+
+# Compilers
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.lib
+*.pdb
+
+# IDEs/editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Misc
+compile_commands.json
+*.ninja
+.ninja_deps
+.ninja_log
