@@ -6,6 +6,7 @@ add_library(harq STATIC
     ${CMAKE_CURRENT_LIST_DIR}/../src/bpsk.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../src/bpsk_passband.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../src/chase_algorithm.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../src/hamming_encoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../src/utils.cpp
 )
 
