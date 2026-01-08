@@ -13,6 +13,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_LIST_DIR}/../tests/bpsk_test.cpp
         ${CMAKE_CURRENT_LIST_DIR}/../tests/bpsk_passband_test.cpp
         ${CMAKE_CURRENT_LIST_DIR}/../tests/chase_algorithm_test.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../tests/hamming_encoder_test.cpp
     )
 
     target_link_libraries(bpsk_tests
