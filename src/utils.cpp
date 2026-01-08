@@ -20,7 +20,7 @@ std::vector<size_t> get_n_smallest_indices(const std::vector<double> &values,
 
   std::partial_sort(
       indexed.begin(), indexed.begin() + n, indexed.end(),
-      [](const auto &a, const auto &b) { return a.first < b.first; });
+      [](const auto &a, const auto &b) { return std::abs(a.first) < std::abs(b.first); });
 
   result.reserve(n);
   for (int i = 0; i < n; i++) {

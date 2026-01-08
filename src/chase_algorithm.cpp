@@ -153,4 +153,25 @@ CalculateCandidates(const std::vector<uint8_t> &message, int r, int d,
   return CandidatesVector;
 }
 
+std::pair<double, std::vector<uint8_t>>
+CalculateDistance(std::vector<uint8_t> candidate,
+                  std::vector<double> SoftDecisions) {
+  double result = 0;
+  for (auto i = 0; i < candidate.size(); ++i) {
+    result += std::abs(static_cast<double>(candidate[i]) - SoftDecisions[i]);
+  }
+  return {result, candidate};
+}
+
+std::vector<uint8_t> MakeDecision(std::vector<std::vector<uint8_t>> candidates,
+                                  std::vector<double> SoftDecisions) {
+  std::vector<std::pair<double, std::vector<uint8_t>>> distances;
+  for (const auto &candidate : candidates) {
+    auto CandidateWithDistance = CalculateDistance(candidate, SoftDecisions);
+    distances.push_back(CandidateWithDistance);
+  }
+  std::sort(distances.begin(), distances.end(),
+            [](const auto &a, const auto &b) { return a.first < b.first; });
+  return distances[0].second;
+}
 } // namespace harq
