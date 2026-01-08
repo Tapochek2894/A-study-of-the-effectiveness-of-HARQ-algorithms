@@ -64,7 +64,7 @@ TEST(GetNSmallestIndicesTest, EmptyInput) {
 TEST(GenerateProbeSequences1Test, Basic) {
     auto seqs = generate_probe_sequences_1(3, 2); // d/2 = 1 → все комбинации с одной 1
     // Ожидаем: [000], [001], [010], [100]
-    std::vector<std::vector<char>> expected = {
+    std::vector<std::vector<uint8_t>> expected = {
         {0,0,0},
         {0,0,1},
         {0,1,0},
@@ -82,13 +82,13 @@ TEST(GenerateProbeSequences1Test, dZero) {
 TEST(GenerateProbeSequences1Test, dOdd) {
     // d=3 → d/2 = 1 (integer division)
     auto seqs = generate_probe_sequences_1(2, 3);
-    EXPECT_EQ(seqs, std::vector<std::vector<char>>({{0,0}, {0,1}, {1,0}}));
+    EXPECT_EQ(seqs, std::vector<std::vector<uint8_t>>({{0,0}, {0,1}, {1,0}}));
 }
 
 TEST(GenerateProbeSequences1Test, AllOnes) {
     // n=2, d=4 → d/2=2 → только [1,1]
     auto seqs = generate_probe_sequences_1(2, 4);
-    EXPECT_EQ(seqs, std::vector<std::vector<char>>({{0,0}, {1,1}}));
+    EXPECT_EQ(seqs, std::vector<std::vector<uint8_t>>({{0,0}, {1,1}}));
 }
 
 TEST(GenerateProbeSequences1Test, InvalidInput) {
@@ -114,11 +114,11 @@ TEST(GenerateProbeSequences2Test, Basic) {
     }
 
     // Убедимся, что все комбинации присутствуют
-    std::set<std::vector<char>> seq_set(seqs.begin(), seqs.end());
+    std::set<std::vector<uint8_t>> seq_set(seqs.begin(), seqs.end());
     EXPECT_EQ(seq_set.size(), 8u); // уникальность
 
     // Проверим конкретную: [0,1,0,1,0] → индекс1=1, индекс3=1 → да
-    std::vector<char> expected = {0,1,0,1,0};
+    std::vector<uint8_t> expected = {0,1,0,1,0};
     EXPECT_TRUE(seq_set.count(expected) > 0);
 }
 
@@ -126,13 +126,13 @@ TEST(GenerateProbeSequences2Test, dZeroOrOne) {
     // d=1 → d/2 = 0 → только нулевой вектор
     std::vector<double> rel = {0.1, 0.2};
     auto seqs = generate_probe_sequences_2(2, 1, rel);
-    EXPECT_EQ(seqs, std::vector<std::vector<char>>({{0,0}}));
+    EXPECT_EQ(seqs, std::vector<std::vector<uint8_t>>({{0,0}}));
 }
 
 TEST(GenerateProbeSequences2Test, SelectionOne) {
     std::vector<double> rel = {0.5, 0.1, 0.9};
     auto seqs = generate_probe_sequences_2(3, 2, rel); // d/2=1 → наименее надёжный: индекс 1
-    std::vector<std::vector<char>> expected = {{0,0,0}, {0,1,0}};
+    std::vector<std::vector<uint8_t>> expected = {{0,0,0}, {0,1,0}};
     EXPECT_EQ(seqs, expected);
 }
 
@@ -159,7 +159,7 @@ TEST(GenerateProbeSequences3Test, dOdd) {
     // ones_positions: i=0 → 3
     auto seqs = generate_probe_sequences_3(5, 3, rel);
     EXPECT_EQ(seqs.size(), 1u);
-    std::vector<char> expected = {0,0,0,1,0}; // только позиция 3 = 1
+    std::vector<uint8_t> expected = {0,0,0,1,0}; // только позиция 3 = 1
     EXPECT_EQ(seqs[0], expected);
 }
 
@@ -170,7 +170,7 @@ TEST(GenerateProbeSequences3Test, dEven) {
     // Наименее надёжные (3 шт): [1,3,2]
     // ones_positions: [1,3] + (начиная с i=3 → выход за пределы) → только [1,3]
     auto seqs = generate_probe_sequences_3(5, 4, rel);
-    std::vector<char> expected = {0,1,0,1,0};
+    std::vector<uint8_t> expected = {0,1,0,1,0};
     EXPECT_EQ(seqs[0], expected);
 }
 
@@ -206,9 +206,9 @@ TEST(GenerateProbeSequencesSanity, OnlyZerosAndOnes) {
     auto s2 = generate_probe_sequences_2(5, 4, rel);
     auto s3 = generate_probe_sequences_3(5, 3, rel);
 
-    auto check = [](const std::vector<std::vector<char>>& seqs) {
+    auto check = [](const std::vector<std::vector<uint8_t>>& seqs) {
         for (const auto& seq : seqs) {
-            for (char c : seq) {
+            for (uint8_t c : seq) {
                 EXPECT_TRUE(c == 0 || c == 1);
             }
         }
