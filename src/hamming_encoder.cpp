@@ -64,6 +64,17 @@ std::vector<uint8_t> HammingEncoder::Encode(
   return codeword;
 }
 
+std::vector<uint8_t> HammingEncoder::EncodeExtended(
+    const std::vector<uint8_t>& data) const {
+  std::vector<uint8_t> codeword = Encode(data);
+  uint8_t parity = 0;
+  for (uint8_t bit : codeword) {
+    parity ^= bit;
+  }
+  codeword.push_back(parity);
+  return codeword;
+}
+
 bool HammingEncoder::IsPowerOfTwo(int value) {
   return value > 0 && (value & (value - 1)) == 0;
 }

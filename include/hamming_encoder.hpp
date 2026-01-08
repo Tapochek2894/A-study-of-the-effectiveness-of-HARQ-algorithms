@@ -19,6 +19,9 @@ class HammingEncoder {
   // Кодирует k битов данных в n-битовое кодовое слово Хэмминга через матрицу G.
   std::vector<uint8_t> Encode(const std::vector<uint8_t>& data) const;
 
+  // Кодирует k битов данных в расширенное кодовое слово (n+1) с общим паритетом.
+  std::vector<uint8_t> EncodeExtended(const std::vector<uint8_t>& data) const;
+
  private:
   static bool IsPowerOfTwo(int value);
   std::vector<uint8_t> BuildCodewordFromData(

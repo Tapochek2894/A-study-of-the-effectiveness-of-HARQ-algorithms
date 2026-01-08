@@ -79,3 +79,17 @@ TEST(HammingEncoderTest, ThrowsOnInvalidInput) {
   EXPECT_THROW(encoder.Encode({1, 0}), std::invalid_argument);
   EXPECT_THROW(encoder.Encode({0, 1, 2, 0}), std::invalid_argument);
 }
+
+TEST(HammingEncoderTest, EncodesExtendedCodeword74) {
+  harq::HammingEncoder encoder(3);
+  const std::vector<uint8_t> message = {1, 0, 1, 1};
+  const std::vector<uint8_t> codeword = encoder.EncodeExtended(message);
+
+  ASSERT_EQ(codeword.size(), 8u);
+
+  uint8_t parity = 0;
+  for (size_t i = 0; i + 1 < codeword.size(); i++) {
+    parity ^= codeword[i];
+  }
+  EXPECT_EQ(codeword.back(), parity);
+}
