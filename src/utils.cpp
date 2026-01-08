@@ -3,19 +3,19 @@
 #include "utils.hpp"
 
 namespace harq {
-std::vector<size_t> get_n_smallest_indices(const std::vector<double> &values,
+std::vector<size_t> get_n_smallest_indices(const std::vector<double> &soft_desicions,
                                            int n) {
   std::vector<size_t> result;
 
-  if (n <= 0 || values.empty() || n > static_cast<int>(values.size())) {
+  if (n <= 0 || soft_desicions.empty() || n > static_cast<int>(soft_desicions.size())) {
     throw std::invalid_argument("Reliability values are incorrect.");
   }
 
   std::vector<std::pair<double, size_t>> indexed;
-  indexed.reserve(values.size());
+  indexed.reserve(soft_desicions.size());
 
-  for (size_t i = 0; i < values.size(); i++) {
-    indexed.emplace_back(values[i], i);
+  for (size_t i = 0; i < soft_desicions.size(); i++) {
+    indexed.emplace_back(soft_desicions[i], i);
   }
 
   std::partial_sort(
