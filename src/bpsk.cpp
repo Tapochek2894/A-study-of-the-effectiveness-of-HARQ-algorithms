@@ -26,4 +26,20 @@ std::vector<double> BpskModulate(const std::vector<uint8_t>& bits) {
   return BpskModulator{}.Modulate(bits);
 }
 
+std::vector<uint8_t> BpskDemodulator::Demodulate(
+    const std::vector<double>& symbols) const {
+  std::vector<uint8_t> bits;
+  bits.reserve(symbols.size());
+
+  for (double symbol : symbols) {
+    bits.push_back(symbol >= 0.0 ? 1 : 0);
+  }
+
+  return bits;
+}
+
+std::vector<uint8_t> BpskDemodulate(const std::vector<double>& symbols) {
+  return BpskDemodulator{}.Demodulate(symbols);
+}
+
 }  // namespace harq
