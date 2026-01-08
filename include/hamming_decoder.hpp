@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace harq {
@@ -8,6 +9,13 @@ namespace harq {
 // Модуль декодера Хэмминга: исправляет одиночную ошибку по синдрому.
 class HammingDecoder {
  public:
+  enum class DecodeStatus {
+    kNoError,
+    kCorrected,
+    kParityCorrected,
+    kDetectedDouble
+  };
+
   explicit HammingDecoder(int r);
 
   int n() const;
@@ -18,6 +26,10 @@ class HammingDecoder {
 
   // Исправляет кодовое слово и извлекает k информационных битов.
   std::vector<uint8_t> Decode(const std::vector<uint8_t>& codeword) const;
+
+  // Возвращает данные и статус декодирования (включая детекцию двойной ошибки).
+  std::pair<std::vector<uint8_t>, DecodeStatus> DecodeWithStatus(
+      const std::vector<uint8_t>& codeword) const;
 
  private:
   static bool IsPowerOfTwo(int value);

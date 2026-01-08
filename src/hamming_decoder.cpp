@@ -25,8 +25,10 @@ int HammingDecoder::k() const { return k_; }
 
 std::vector<uint8_t> HammingDecoder::Correct(
     const std::vector<uint8_t>& codeword) const {
-  if (static_cast<int>(codeword.size()) != n_) {
-    throw std::invalid_argument("Hamming decoder expects n codeword bits.");
+  if (static_cast<int>(codeword.size()) != n_ &&
+      static_cast<int>(codeword.size()) != n_ + 1) {
+    throw std::invalid_argument(
+        "Hamming decoder expects n or n+1 codeword bits.");
   }
 
   for (uint8_t bit : codeword) {
@@ -36,8 +38,22 @@ std::vector<uint8_t> HammingDecoder::Correct(
   }
 
   std::vector<uint8_t> corrected = codeword;
+
+  bool extended = static_cast<int>(codeword.size()) == n_ + 1;
   int syndrome = ComputeSyndrome(corrected);
-  if (syndrome > 0 && syndrome <= n_) {
+
+  if (extended) {
+    uint8_t overall_parity = 0;
+    for (uint8_t bit : corrected) {
+      overall_parity ^= bit;
+    }
+
+    if (syndrome == 0 && overall_parity == 1) {
+      corrected.back() ^= 1;
+    } else if (syndrome != 0 && overall_parity == 1) {
+      corrected[syndrome - 1] ^= 1;
+    }
+  } else if (syndrome > 0 && syndrome <= n_) {
     corrected[syndrome - 1] ^= 1;
   }
 
@@ -65,12 +81,68 @@ int HammingDecoder::ComputeSyndrome(
     const std::vector<uint8_t>& codeword) const {
   int syndrome = 0;
   // Синдром соответствует XOR индексов позиций с единичными битами.
-  for (int pos = 1; pos <= n_; pos++) {
+  int limit = std::min(static_cast<int>(codeword.size()), n_);
+  for (int pos = 1; pos <= limit; pos++) {
     if (codeword[pos - 1] == 1) {
       syndrome ^= pos;
     }
   }
   return syndrome;
+}
+
+std::pair<std::vector<uint8_t>, HammingDecoder::DecodeStatus>
+HammingDecoder::DecodeWithStatus(const std::vector<uint8_t>& codeword) const {
+  if (static_cast<int>(codeword.size()) != n_ &&
+      static_cast<int>(codeword.size()) != n_ + 1) {
+    throw std::invalid_argument(
+        "Hamming decoder expects n or n+1 codeword bits.");
+  }
+
+  for (uint8_t bit : codeword) {
+    if (bit != 0 && bit != 1) {
+      throw std::invalid_argument("Hamming decoder expects bits 0 or 1.");
+    }
+  }
+
+  bool extended = static_cast<int>(codeword.size()) == n_ + 1;
+  std::vector<uint8_t> corrected = codeword;
+  int syndrome = ComputeSyndrome(corrected);
+
+  DecodeStatus status = DecodeStatus::kNoError;
+
+  if (extended) {
+    uint8_t overall_parity = 0;
+    for (uint8_t bit : corrected) {
+      overall_parity ^= bit;
+    }
+
+    if (syndrome == 0 && overall_parity == 0) {
+      status = DecodeStatus::kNoError;
+    } else if (syndrome != 0 && overall_parity == 1) {
+      corrected[syndrome - 1] ^= 1;
+      status = DecodeStatus::kCorrected;
+    } else if (syndrome == 0 && overall_parity == 1) {
+      corrected.back() ^= 1;
+      status = DecodeStatus::kParityCorrected;
+    } else {
+      status = DecodeStatus::kDetectedDouble;
+    }
+  } else {
+    if (syndrome > 0 && syndrome <= n_) {
+      corrected[syndrome - 1] ^= 1;
+      status = DecodeStatus::kCorrected;
+    } else {
+      status = DecodeStatus::kNoError;
+    }
+  }
+
+  std::vector<uint8_t> data;
+  data.reserve(k_);
+  for (int pos : data_positions_) {
+    data.push_back(corrected[pos - 1]);
+  }
+
+  return {data, status};
 }
 
 }  // namespace harq
