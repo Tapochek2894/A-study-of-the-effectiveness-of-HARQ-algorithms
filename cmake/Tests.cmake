@@ -9,13 +9,11 @@ if(BUILD_TESTING)
     )
     FetchContent_MakeAvailable(googletest)
 
-    add_executable(bpsk_tests
-        ${CMAKE_CURRENT_LIST_DIR}/../tests/bpsk_test.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/../tests/bpsk_passband_test.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/../tests/chase_algorithm_test.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/../tests/hamming_decoder_test.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/../tests/hamming_encoder_test.cpp
+    file(GLOB HARQ_TEST_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_LIST_DIR}/../tests/*_test.cpp
     )
+
+    add_executable(bpsk_tests ${HARQ_TEST_SOURCES})
 
     target_link_libraries(bpsk_tests
         PRIVATE
