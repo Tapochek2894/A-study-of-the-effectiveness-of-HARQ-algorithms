@@ -1,11 +1,12 @@
 #include "chase_algorithm.hpp"
+#include "hamming_decoder.hpp"
 #include "utils.hpp"
 #include <algorithm>
 #include <stdexcept>
 
 namespace harq {
-std::vector<std::vector<char>> generate_probe_sequences_1(int n, int d) {
-  std::vector<std::vector<char>> result;
+std::vector<std::vector<uint8_t>> generate_probe_sequences_1(int n, int d) {
+  std::vector<std::vector<uint8_t>> result;
   int ones_count = d / 2;
 
   if (ones_count == 0) {
@@ -16,8 +17,8 @@ std::vector<std::vector<char>> generate_probe_sequences_1(int n, int d) {
     throw std::invalid_argument("Wrong input data: d/2 > n");
   }
 
-  result.push_back(std::vector<char>(n, 0));
-  std::vector<char> mask(n, 0);
+  result.push_back(std::vector<uint8_t>(n, 0));
+  std::vector<uint8_t> mask(n, 0);
   std::fill(mask.end() - ones_count, mask.end(), 1);
 
   do {
@@ -27,11 +28,11 @@ std::vector<std::vector<char>> generate_probe_sequences_1(int n, int d) {
   return result;
 }
 
-std::vector<std::vector<char>>
+std::vector<std::vector<uint8_t>>
 generate_probe_sequences_2(int n, int d,
                            const std::vector<double> &reliability) {
 
-  std::vector<std::vector<char>> result;
+  std::vector<std::vector<uint8_t>> result;
 
   if (n <= 0 || d <= 0 || reliability.size() != static_cast<size_t>(n)) {
     throw std::invalid_argument("Reliability values are incorrect.");
@@ -42,7 +43,7 @@ generate_probe_sequences_2(int n, int d,
     throw std::invalid_argument("Wrong input data: d/2 > n");
   }
   if (selection_positions == 0) {
-    result.push_back(std::vector<char>(n, 0));
+    result.push_back(std::vector<uint8_t>(n, 0));
     return result;
   }
 
@@ -50,10 +51,10 @@ generate_probe_sequences_2(int n, int d,
 
   int total_combinations = 1 << selection_positions;
 
-  std::vector<char> base_sequence(n, 0);
+  std::vector<uint8_t> base_sequence(n, 0);
 
   for (int mask = 0; mask < total_combinations; mask++) {
-    std::vector<char> sequence = base_sequence;
+    std::vector<uint8_t> sequence = base_sequence;
     for (int i = 0; i < selection_positions; i++) {
       char value = (mask >> i) & 1;
       sequence[min_indices[i]] = value;
@@ -65,11 +66,10 @@ generate_probe_sequences_2(int n, int d,
   return result;
 }
 
-std::vector<std::vector<char>>
+std::vector<std::vector<uint8_t>>
 generate_probe_sequences_3(int n, int d,
                            const std::vector<double> &reliability) {
-
-  std::vector<std::vector<char>> result;
+  std::vector<std::vector<uint8_t>> result;
 
   if (n <= 0 || d <= 0 || reliability.size() != static_cast<size_t>(n)) {
     throw std::invalid_argument("Reliability values are incorrect.");
@@ -102,7 +102,7 @@ generate_probe_sequences_3(int n, int d,
     }
   }
 
-  std::vector<char> sequence(n, 0);
+  std::vector<uint8_t> sequence(n, 0);
   for (size_t pos : ones_positions) {
     if (pos < static_cast<size_t>(n)) {
       sequence[pos] = 1;
@@ -111,6 +111,46 @@ generate_probe_sequences_3(int n, int d,
 
   result.push_back(sequence);
   return result;
+}
+
+std::vector<uint8_t> AddErrorVector(const std::vector<uint8_t> &DataVector,
+                                    const std::vector<uint8_t> &ErrorVector) {
+  std::vector<uint8_t> NewVector(DataVector.size(), 0);
+  for (auto i = 0; i < NewVector.size(); ++i) {
+    NewVector[i] = DataVector[i] ^ ErrorVector[i];
+  }
+  return NewVector;
+}
+
+std::vector<std::vector<uint8_t>>
+CalculateCandidates(const std::vector<uint8_t> &message, int r, int d,
+                    const std::vector<double> &reliability,
+                    ProbeAlgorithm algorithm) {
+  HammingDecoder decoder(r);
+  auto DecodedWord = decoder.Decode(message);
+
+  std::vector<std::vector<uint8_t>> ProbeSeqs;
+  switch (algorithm) {
+  case ProbeAlgorithm::First:
+    ProbeSeqs = generate_probe_sequences_1(DecodedWord.size(), d);
+    break;
+  case ProbeAlgorithm::Second:
+    ProbeSeqs = generate_probe_sequences_2(DecodedWord.size(), d, reliability);
+    break;
+  case ProbeAlgorithm::Third:
+    ProbeSeqs = generate_probe_sequences_3(DecodedWord.size(), d, reliability);
+    break;
+  default:
+    throw std::invalid_argument("Wrong probe algorithm chosen");
+  }
+
+  std::vector<std::vector<uint8_t>> CandidatesVector(ProbeSeqs.size());
+  for (const auto &ErrorVector : ProbeSeqs) {
+    auto NewVector = AddErrorVector(DecodedWord, ErrorVector);
+    auto DecodedNewVector = decoder.Decode(NewVector);
+    CandidatesVector.push_back(DecodedNewVector);
+  }
+  return CandidatesVector;
 }
 
 } // namespace harq
