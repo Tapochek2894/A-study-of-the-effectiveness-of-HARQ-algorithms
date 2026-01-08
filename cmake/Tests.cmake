@@ -11,6 +11,7 @@ if(BUILD_TESTING)
 
     add_executable(bpsk_tests
         ${CMAKE_CURRENT_LIST_DIR}/../tests/bpsk_test.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../tests/bpsk_passband_test.cpp
     )
 
     target_link_libraries(bpsk_tests

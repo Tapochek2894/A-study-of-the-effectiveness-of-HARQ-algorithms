@@ -4,6 +4,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(harq STATIC
     ${CMAKE_CURRENT_LIST_DIR}/../src/bpsk.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../src/bpsk_passband.cpp
 )
 
 target_include_directories(harq PUBLIC
