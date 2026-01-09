@@ -11,3 +11,9 @@ add_library(harq STATIC ${HARQ_SOURCES})
 target_include_directories(harq PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/../include
 )
+
+add_executable(bpsk_awgn_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/bpsk_awgn_sim.cpp
+)
+
+target_link_libraries(bpsk_awgn_sim PRIVATE harq)
