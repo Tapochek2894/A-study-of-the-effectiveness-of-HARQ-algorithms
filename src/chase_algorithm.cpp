@@ -1,5 +1,4 @@
 #include "chase_algorithm.hpp"
-#include "hamming_decoder.hpp"
 #include "utils.hpp"
 #include <algorithm>
 #include <stdexcept>
@@ -126,29 +125,31 @@ std::vector<std::vector<uint8_t>>
 CalculateCandidates(const std::vector<uint8_t> &message, int r, int d,
                     const std::vector<double> &reliability,
                     ProbeAlgorithm algorithm) {
-  HammingDecoder decoder(r);
-  auto DecodedWord = decoder.Decode(message);
+  (void)r;
+
+  if (message.empty()) {
+    throw std::invalid_argument("Message must be non-empty.");
+  }
 
   std::vector<std::vector<uint8_t>> ProbeSeqs;
   switch (algorithm) {
   case ProbeAlgorithm::First:
-    ProbeSeqs = generate_probe_sequences_1(DecodedWord.size(), d);
+    ProbeSeqs = generate_probe_sequences_1(message.size(), d);
     break;
   case ProbeAlgorithm::Second:
-    ProbeSeqs = generate_probe_sequences_2(DecodedWord.size(), d, reliability);
+    ProbeSeqs = generate_probe_sequences_2(message.size(), d, reliability);
     break;
   case ProbeAlgorithm::Third:
-    ProbeSeqs = generate_probe_sequences_3(DecodedWord.size(), d, reliability);
+    ProbeSeqs = generate_probe_sequences_3(message.size(), d, reliability);
     break;
   default:
     throw std::invalid_argument("Wrong probe algorithm chosen");
   }
 
-  std::vector<std::vector<uint8_t>> CandidatesVector(ProbeSeqs.size());
+  std::vector<std::vector<uint8_t>> CandidatesVector;
+  CandidatesVector.reserve(ProbeSeqs.size());
   for (const auto &ErrorVector : ProbeSeqs) {
-    auto NewVector = AddErrorVector(DecodedWord, ErrorVector);
-    auto DecodedNewVector = decoder.Decode(NewVector);
-    CandidatesVector.push_back(DecodedNewVector);
+    CandidatesVector.push_back(AddErrorVector(message, ErrorVector));
   }
   return CandidatesVector;
 }

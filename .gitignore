@@ -11,6 +11,7 @@ Testing/
 Makefile
 *_include.cmake
 *_tests.cmake
+.cache
 
 # Compilers
 *.o

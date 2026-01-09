@@ -7,6 +7,8 @@
 
 // Предполагается, что у тебя есть chase_algorithm.hpp с объявлением функций
 #include "chase_algorithm.hpp"
+#include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
 #include "utils.hpp"
 
 using namespace harq;
@@ -198,6 +200,68 @@ TEST(GenerateProbeSequences3Test, InvalidInput) {
 }
 
 // ------------------------------------------------------------------
+// 5. Быстрый тест Chase по информационным битам (условный сценарий)
+// ------------------------------------------------------------------
+
+TEST(ChaseCombiningTest, RecoversTwoBitErrorsOnInfoLevel) {
+    const int r = 3;
+    const int d = 4; // условно для выбора двух позиций d/2
+
+    const std::vector<uint8_t> message = {1, 0, 1, 1};
+    harq::HammingEncoder encoder(r);
+    const std::vector<uint8_t> codeword = encoder.Encode(message);
+
+    harq::HammingDecoder decoder(r);
+
+    std::vector<uint8_t> received;
+    std::vector<uint8_t> hard_decoded;
+    std::vector<int> error_positions;
+
+    for (size_t i = 0; i < codeword.size(); ++i) {
+        for (size_t j = i + 1; j < codeword.size(); ++j) {
+            received = codeword;
+            received[i] ^= 1;
+            received[j] ^= 1;
+
+            hard_decoded = decoder.Decode(received);
+            error_positions.clear();
+
+            for (size_t k = 0; k < message.size(); ++k) {
+                if (hard_decoded[k] != message[k]) {
+                    error_positions.push_back(static_cast<int>(k));
+                }
+            }
+
+            if (error_positions.size() == 2) {
+                break;
+            }
+        }
+        if (error_positions.size() == 2) {
+            break;
+        }
+    }
+
+    ASSERT_EQ(error_positions.size(), 2u);
+
+    std::vector<double> reliability(message.size(), 1.0);
+    for (int pos : error_positions) {
+        reliability[pos] = 0.01;
+    }
+
+    std::vector<double> llr(message.size(), 0.0);
+    for (size_t k = 0; k < message.size(); ++k) {
+        llr[k] = message[k] ? 5.0 : -5.0;
+        if (reliability[k] < 0.1) {
+            llr[k] *= 0.1;
+        }
+    }
+
+    auto candidates =
+        CalculateCandidates(hard_decoded, r, d, reliability, ProbeAlgorithm::Second);
+    auto decided = MakeDecision(candidates, llr);
+
+    EXPECT_EQ(decided, message);
+}
 // Дополнительно: убедимся, что все последовательности содержат только 0 и 1
 // ------------------------------------------------------------------
 TEST(GenerateProbeSequencesSanity, OnlyZerosAndOnes) {

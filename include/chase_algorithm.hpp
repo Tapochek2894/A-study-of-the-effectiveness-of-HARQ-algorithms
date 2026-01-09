@@ -26,4 +26,11 @@ std::vector<std::vector<uint8_t>>
 CalculateCandidates(const std::vector<uint8_t> &message, int r, int d,
                     const std::vector<double> &reliability,
                     ProbeAlgorithm algorithm);
+
+std::vector<uint8_t> MakeDecision(std::vector<std::vector<uint8_t>> candidates,
+                                  std::vector<double> SoftDecisions);
+
+std::pair<double, std::vector<uint8_t>>
+CalculateDistance(std::vector<uint8_t> candidate,
+                  std::vector<double> SoftDecisions);
 } // namespace harq
