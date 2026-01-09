@@ -11,3 +11,9 @@ add_library(harq STATIC ${HARQ_SOURCES})
 target_include_directories(harq PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/../include
 )
+
+add_executable(ber_bler_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/ber_bler_sim.cpp
+)
+
+target_link_libraries(ber_bler_sim PRIVATE harq)
