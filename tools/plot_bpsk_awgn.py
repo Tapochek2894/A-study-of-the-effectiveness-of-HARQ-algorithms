@@ -11,14 +11,22 @@ import matplotlib.pyplot as plt
 def load_csv(path: Path):
     snr_vals = []
     ber_vals = []
+    ber_uncoded = []
+    ber_coded = []
     with path.open(newline="") as f:
         reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
         for row in reader:
             if not row:
                 continue
             snr_vals.append(float(row["snr_db"]))
-            ber_vals.append(float(row["ber"]))
-    return snr_vals, ber_vals
+            if "ber" in fieldnames:
+                ber_vals.append(float(row["ber"]))
+            if "ber_uncoded" in fieldnames:
+                ber_uncoded.append(float(row["ber_uncoded"]))
+            if "ber_coded" in fieldnames:
+                ber_coded.append(float(row["ber_coded"]))
+    return snr_vals, ber_vals, ber_uncoded, ber_coded
 
 
 def parse_args():
@@ -50,10 +58,15 @@ def main():
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
 
-    snr_vals, ber_vals = load_csv(csv_path)
+    snr_vals, ber_vals, ber_uncoded, ber_coded = load_csv(csv_path)
 
     fig, ax = plt.subplots()
-    ax.plot(snr_vals, ber_vals, marker="o", label="BER")
+    if ber_vals:
+        ax.plot(snr_vals, ber_vals, marker="o", label="BER")
+    if ber_uncoded:
+        ax.plot(snr_vals, ber_uncoded, marker="o", label="BER uncoded")
+    if ber_coded:
+        ax.plot(snr_vals, ber_coded, marker="s", label="BER coded")
     ax.set_xlabel("SNR (dB)")
     ax.set_ylabel("BER")
     ax.set_title(args.title)
