@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+
+def load_csv(path: Path):
+    p_vals = []
+    ber_vals = []
+    bler_vals = []
+    with path.open(newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if not row:
+                continue
+            p_vals.append(float(row["p"]))
+            ber_vals.append(float(row["ber"]))
+            bler_vals.append(float(row["bler"]))
+    return p_vals, ber_vals, bler_vals
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Plot BER/BLER vs p from CSV produced by ber_bler_sim."
+    )
+    parser.add_argument("csv_path", help="Path to CSV file")
+    parser.add_argument(
+        "--out",
+        help="Output image path (default: <csv_name>_plot.png)",
+        default=None,
+    )
+    parser.add_argument(
+        "--log-x",
+        action="store_true",
+        help="Use logarithmic scale on X axis",
+    )
+    parser.add_argument(
+        "--log-y",
+        action="store_true",
+        help="Use logarithmic scale on Y axis",
+    )
+    parser.add_argument(
+        "--title",
+        default="BER/BLER vs p",
+        help="Plot title",
+    )
+    parser.add_argument(
+        "--r",
+        type=int,
+        default=None,
+        help="Parity bits for Hamming code to plot theory curves",
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    csv_path = Path(args.csv_path)
+    if not csv_path.exists():
+        raise SystemExit(f"CSV not found: {csv_path}")
+
+    p_vals, ber_vals, bler_vals = load_csv(csv_path)
+
+    fig, ax = plt.subplots()
+    ax.plot(p_vals, ber_vals, marker="o", label="BER")
+    ax.plot(p_vals, bler_vals, marker="s", label="BLER")
+
+    if args.r is not None:
+        if args.r < 2:
+            raise SystemExit("r must be >= 2 for Hamming code.")
+        n = (1 << args.r) - 1
+        ber_theory = []
+        bler_theory = []
+        for p in p_vals:
+            ber_theory.append(p - p * (1.0 - p) ** (n - 1))
+            bler_theory.append(
+                1.0 - (1.0 - p) ** n - n * p * (1.0 - p) ** (n - 1)
+            )
+        ax.plot(p_vals, ber_theory, linestyle="--", label=f"BER theory (n={n})")
+        ax.plot(p_vals, bler_theory, linestyle="--", label=f"BLER theory (n={n})")
+    ax.set_xlabel("p")
+    ax.set_ylabel("Probability")
+    ax.set_title(args.title)
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
+    ax.legend()
+
+    if args.log_x:
+        ax.set_xscale("log")
+    if args.log_y:
+        ax.set_yscale("log")
+
+    out_path = Path(args.out) if args.out else csv_path.with_name(
+        csv_path.stem + "_plot.png"
+    )
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    print(out_path)
+
+
+if __name__ == "__main__":
+    main()
