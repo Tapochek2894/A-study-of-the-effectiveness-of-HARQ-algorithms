@@ -48,6 +48,12 @@ def parse_args():
         default="BER/BLER vs p",
         help="Plot title",
     )
+    parser.add_argument(
+        "--r",
+        type=int,
+        default=None,
+        help="Parity bits for Hamming code to plot theory curves",
+    )
     return parser.parse_args()
 
 
@@ -62,6 +68,20 @@ def main():
     fig, ax = plt.subplots()
     ax.plot(p_vals, ber_vals, marker="o", label="BER")
     ax.plot(p_vals, bler_vals, marker="s", label="BLER")
+
+    if args.r is not None:
+        if args.r < 2:
+            raise SystemExit("r must be >= 2 for Hamming code.")
+        n = (1 << args.r) - 1
+        ber_theory = []
+        bler_theory = []
+        for p in p_vals:
+            ber_theory.append(p - p * (1.0 - p) ** (n - 1))
+            bler_theory.append(
+                1.0 - (1.0 - p) ** n - n * p * (1.0 - p) ** (n - 1)
+            )
+        ax.plot(p_vals, ber_theory, linestyle="--", label=f"BER theory (n={n})")
+        ax.plot(p_vals, bler_theory, linestyle="--", label=f"BLER theory (n={n})")
     ax.set_xlabel("p")
     ax.set_ylabel("Probability")
     ax.set_title(args.title)
