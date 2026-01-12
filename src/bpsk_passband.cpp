@@ -97,6 +97,37 @@ std::vector<uint8_t> BpskPassbandDemodulator::Demodulate(
   return bits;
 }
 
+std::vector<double> BpskPassbandDemodulator::DemodulateSoft(
+    const std::vector<double>& samples) const {
+  ValidateCarrierConfig(config_);
+
+  if (samples.size() %
+          static_cast<std::size_t>(config_.samples_per_symbol) !=
+      0) {
+    throw std::invalid_argument(
+        "Sample count must be a multiple of samples per symbol.");
+  }
+
+  const std::size_t symbols_count =
+      samples.size() / static_cast<std::size_t>(config_.samples_per_symbol);
+  std::vector<double> bits;
+  bits.reserve(symbols_count);
+
+  std::size_t sample_index = 0;
+  for (std::size_t symbol_index = 0; symbol_index < symbols_count;
+       ++symbol_index) {
+    double accum = 0.0;
+    for (int k = 0; k < config_.samples_per_symbol; ++k) {
+      const double carrier = CarrierAt(config_, sample_index);
+      accum += samples[sample_index] * carrier;
+      ++sample_index;
+    }
+    bits.push_back(accum / static_cast<double>(symbols_count));
+  }
+
+  return bits;
+}
+
 std::vector<double> BpskPassbandModulate(
     const std::vector<uint8_t>& bits,
     BpskCarrierConfig config) {
@@ -107,6 +138,12 @@ std::vector<uint8_t> BpskPassbandDemodulate(
     const std::vector<double>& samples,
     BpskCarrierConfig config) {
   return BpskPassbandDemodulator(config).Demodulate(samples);
+}
+
+std::vector<double> BpskPassbandDemodulateSoft(
+    const std::vector<double>& samples,
+    BpskCarrierConfig config) {
+  return BpskPassbandDemodulator(config).DemodulateSoft(samples);
 }
 
 }  // namespace harq

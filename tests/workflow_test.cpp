@@ -1,11 +1,9 @@
 #include "awgn_channel.hpp"
 #include "bpsk_passband.hpp"
+#include "chase_algorithm.hpp"
 #include "hamming_decoder.hpp"
 #include "hamming_encoder.hpp"
-
 #include <gtest/gtest.h>
-
-#include <cstdint>
 #include <vector>
 
 namespace {
@@ -13,7 +11,7 @@ namespace {
 std::vector<uint8_t> RoundTripBits(const std::vector<uint8_t> &bits) {
   const int r = 3;
   const harq::HammingEncoder encoder(r);
-  const std::vector<uint8_t> codeword = encoder.Encode(bits);
+  const std::vector<uint8_t> codeword = encoder.EncodeExtended(bits);
 
   harq::BpskCarrierConfig config;
   config.carrier_hz = 2.0;
@@ -29,10 +27,22 @@ std::vector<uint8_t> RoundTripBits(const std::vector<uint8_t> &bits) {
   const std::vector<double> noisy = channel.AddNoise(passband);
   const std::vector<double> llr = channel.ComputeLlr(noisy);
 
-  const std::vector<uint8_t> received =
-      harq::BpskPassbandDemodulate(noisy, config);
+  const std::vector<double> received =
+      harq::BpskPassbandDemodulateSoft(noisy, config);
 
-  return harq::HammingDecoder(r).Decode(received);
+  const std::vector<uint8_t> hard_desicion =
+      harq::BpskPassbandDemodulate(noisy, config);
+  const std::vector<std::vector<uint8_t>> candidates =
+      harq::CalculateCandidates(hard_desicion, r, 3, received,
+                                harq::ProbeAlgorithm::Third);
+  const std::vector<std::vector<uint8_t>> DecodedCandidates =
+      harq::DecodeCandidatesByHamming(candidates, harq::HammingDecoder(r));
+  const std::vector<double> removedCheckBits =
+      harq::RemoveCheckBits<double>(received);
+  const std::vector<uint8_t> decision =
+      harq::MakeDecision(DecodedCandidates, removedCheckBits);
+
+  return decision;
 }
 
 } // namespace

@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include <algorithm>
 #include <stdexcept>
+#include "hamming_decoder.hpp"
 
 namespace harq {
 std::vector<std::vector<uint8_t>> generate_probe_sequences_1(int n, int d) {
@@ -33,7 +34,7 @@ generate_probe_sequences_2(int n, int d,
 
   std::vector<std::vector<uint8_t>> result;
 
-  if (n <= 0 || d <= 0 || reliability.size() != static_cast<size_t>(n)) {
+  if (n <= 0 || d <= 0 || reliability.size() != static_cast<std::size_t>(n)) {
     throw std::invalid_argument("Reliability values are incorrect.");
   }
 
@@ -70,7 +71,7 @@ generate_probe_sequences_3(int n, int d,
                            const std::vector<double> &reliability) {
   std::vector<std::vector<uint8_t>> result;
 
-  if (n <= 0 || d <= 0 || reliability.size() != static_cast<size_t>(n)) {
+  if (n <= 0 || d <= 0 || reliability.size() != static_cast<std::size_t>(n)) {
     throw std::invalid_argument("Reliability values are incorrect.");
     return result;
   }
@@ -83,10 +84,10 @@ generate_probe_sequences_3(int n, int d,
   auto least_reliable_indices =
       get_n_smallest_indices(reliability, precarious_positions);
 
-  std::vector<size_t> ones_positions;
+  std::vector<std::size_t> ones_positions;
 
   if (d % 2 == 1) {
-    for (size_t i = 0; i < least_reliable_indices.size(); i += 2) {
+    for (std::size_t i = 0; i < least_reliable_indices.size(); i += 2) {
       ones_positions.push_back(least_reliable_indices[i]);
     }
   } else {
@@ -96,14 +97,14 @@ generate_probe_sequences_3(int n, int d,
     if (least_reliable_indices.size() >= 2) {
       ones_positions.push_back(least_reliable_indices[1]);
     }
-    for (size_t i = 3; i < least_reliable_indices.size(); i += 2) {
+    for (std::size_t i = 3; i < least_reliable_indices.size(); i += 2) {
       ones_positions.push_back(least_reliable_indices[i]);
     }
   }
 
   std::vector<uint8_t> sequence(n, 0);
-  for (size_t pos : ones_positions) {
-    if (pos < static_cast<size_t>(n)) {
+  for (auto pos : ones_positions) {
+    if (pos < static_cast<std::size_t>(n)) {
       sequence[pos] = 1;
     }
   }
@@ -115,7 +116,7 @@ generate_probe_sequences_3(int n, int d,
 std::vector<uint8_t> AddErrorVector(const std::vector<uint8_t> &DataVector,
                                     const std::vector<uint8_t> &ErrorVector) {
   std::vector<uint8_t> NewVector(DataVector.size(), 0);
-  for (auto i = 0; i < NewVector.size(); ++i) {
+  for (std::size_t i = 0; i < NewVector.size(); ++i) {
     NewVector[i] = DataVector[i] ^ ErrorVector[i];
   }
   return NewVector;
@@ -158,21 +159,42 @@ std::pair<double, std::vector<uint8_t>>
 CalculateDistance(std::vector<uint8_t> candidate,
                   std::vector<double> SoftDecisions) {
   double result = 0;
-  for (auto i = 0; i < candidate.size(); ++i) {
+  for (std::size_t i = 0; i < candidate.size(); ++i) {
     result += std::abs(static_cast<double>(candidate[i]) - SoftDecisions[i]);
   }
   return {result, candidate};
 }
 
-std::vector<uint8_t> MakeDecision(std::vector<std::vector<uint8_t>> candidates,
-                                  std::vector<double> SoftDecisions) {
+std::vector<uint8_t>
+MakeDecision(const std::vector<std::vector<uint8_t>> candidates,
+             const std::vector<double> SoftDecisions) {
   std::vector<std::pair<double, std::vector<uint8_t>>> distances;
   for (const auto &candidate : candidates) {
     auto CandidateWithDistance = CalculateDistance(candidate, SoftDecisions);
     distances.push_back(CandidateWithDistance);
   }
+
   std::sort(distances.begin(), distances.end(),
             [](const auto &a, const auto &b) { return a.first < b.first; });
   return distances[0].second;
 }
+
+std::vector<std::vector<uint8_t>>
+DecodeCandidatesByHamming(const std::vector<std::vector<uint8_t>> &candidates,
+                          const HammingDecoder &decoder) {
+  std::vector<std::vector<uint8_t>> DecodedVectors;
+  for (const auto &vector : candidates) {
+    auto DecodedVector = decoder.DecodeWithStatus(vector);
+    if (DecodedVector.second != HammingDecoder::DecodeStatus::kDetectedDouble) {
+      DecodedVectors.push_back(DecodedVector.first);
+    }
+  }
+
+  if (DecodedVectors.empty()) {
+    DecodedVectors.push_back(decoder.Decode(candidates[0]));
+  }
+  
+  return DecodedVectors;
+}
+
 } // namespace harq
