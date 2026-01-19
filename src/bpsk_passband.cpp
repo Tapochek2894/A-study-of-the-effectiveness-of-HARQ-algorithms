@@ -122,7 +122,7 @@ std::vector<double> BpskPassbandDemodulator::DemodulateSoft(
       accum += samples[sample_index] * carrier;
       ++sample_index;
     }
-    bits.push_back(accum / static_cast<double>(symbols_count));
+    bits.push_back(accum / static_cast<double>(config_.samples_per_symbol));
   }
 
   return bits;

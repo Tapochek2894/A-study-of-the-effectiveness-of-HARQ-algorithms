@@ -30,17 +30,8 @@ std::vector<uint8_t> RoundTripBits(const std::vector<uint8_t> &bits) {
   const std::vector<double> received =
       harq::BpskPassbandDemodulateSoft(noisy, config);
 
-  const std::vector<uint8_t> hard_desicion =
-      harq::BpskPassbandDemodulate(noisy, config);
-  const std::vector<std::vector<uint8_t>> candidates =
-      harq::CalculateCandidates(hard_desicion, r, 3, received,
-                                harq::ProbeAlgorithm::Third);
-  const std::vector<std::vector<uint8_t>> DecodedCandidates =
-      harq::DecodeCandidatesByHamming(candidates, harq::HammingDecoder(r));
-  const std::vector<double> removedCheckBits =
-      harq::RemoveCheckBits<double>(received);
-  const std::vector<uint8_t> decision =
-      harq::MakeDecision(DecodedCandidates, removedCheckBits);
+  const std::vector<uint8_t> decision = harq::DecodeWithChase(
+      received, harq::ProbeAlgorithm::First, harq::HammingDecoder(r));
 
   return decision;
 }
