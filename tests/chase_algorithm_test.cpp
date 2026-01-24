@@ -257,7 +257,7 @@ TEST(ChaseCombiningTest, RecoversTwoBitErrorsOnInfoLevel) {
         }
     }
 
-    auto decided = DecodeWithChase(reliability, ProbeAlgorithm::First, decoder);
+    auto decided = DecodeHammingCodesWithChase(reliability, ProbeAlgorithm::First, decoder);
 
     EXPECT_EQ(message, decided);
 }
