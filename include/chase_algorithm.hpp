@@ -7,6 +7,7 @@
 namespace harq {
 
 const int HAMMING_CODE_DISTANCE = 3;
+const int EXTENDED_HAMMING_CODE_DISTANCE = 4;
 
 enum class ProbeAlgorithm { First, Second, Third };
 
@@ -24,7 +25,7 @@ std::vector<uint8_t> AddErrorVector(const std::vector<uint8_t> &DataVector,
                                     const std::vector<uint8_t> &ErrorVector);
 
 std::vector<std::vector<uint8_t>>
-CalculateCandidates(const std::vector<uint8_t> &message, int r, int d,
+CalculateCandidates(const std::vector<uint8_t> &message, int d,
                     const std::vector<double> &reliability,
                     ProbeAlgorithm algorithm);
 
@@ -35,8 +36,20 @@ CalculateDistance(std::vector<uint8_t> candidate,
 std::vector<std::size_t> get_n_smallest_indices(const std::vector<double> &values,
                                            int n);
 
-std::vector<uint8_t> DecodeWithChase(std::vector<double> ReceivedSoftBits,
-                                     harq::ProbeAlgorithm ProbeAlgorithm,
-                                     harq::HammingDecoder decoder);
+std::vector<uint8_t> DecodeHammingCodesWithChase(
+    const std::vector<double>& ReceivedSoftBits,
+    harq::ProbeAlgorithm probe_algorithm,
+    harq::HammingDecoder decoder);
+
+inline bool IsPowerOfTwo(std::size_t n);
+
+double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
+                           const std::vector<double>& soft_bits);
+
+int GetCodeDistance(std::size_t received_size);
+
+std::vector<uint8_t> DecodeHammingML(
+    const std::vector<double>& soft_bits,
+    const HammingDecoder& decoder);
 
 } // namespace harq

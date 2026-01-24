@@ -18,21 +18,23 @@
 namespace {
 
 struct Options {
-  std::size_t bits = 500000;
+  std::size_t bits = 600000;
   uint32_t seed = 5489u;
-  std::vector<double> snr_list = {-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3,  4};
+  std::vector<double> snr_list = {-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4};
   bool use_range = false;
   double snr_start = -10.0;
   double snr_end = 4.0;
   int snr_points = 15;
   int r = 4;
+  bool extended = false;
 };
 
 void PrintUsage(const char *argv0) {
   std::cout << "Usage: " << argv0 << " [--bits <count>] [--seed <seed>]"
             << " [--snr <dB1,dB2,...>]"
             << " [--snr-start <dB> --snr-end <dB> --snr-points <n>]"
-            << " [--r <parity_bits>]\n";
+            << " [--r <parity_bits>]\n"
+            << " [--extended]\n";
 }
 
 bool ParseSnrList(const std::string &value, std::vector<double> *out) {
@@ -80,6 +82,8 @@ bool ParseArgs(int argc, char **argv, Options *options) {
       options->use_range = true;
     } else if (arg == "--r" && i + 1 < argc) {
       options->r = std::stoi(argv[++i]);
+    } else if (arg == "--extended") {
+      options->extended = true;
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -145,8 +149,11 @@ int main(int argc, char **argv) {
   if (options.r > 0) {
     int base_n = (1 << options.r) - 1;   // 2^r - 1
     int base_k = base_n - options.r;     // 2^r - 1 - r
-    n = base_n + 1;                      // расширенный: 2^r
+    n = base_n;                      // расширенный: 2^r
     k = base_k;   
+    if (options.extended) {
+      n = base_n + 1; 
+    }
     if (options.bits < static_cast<std::size_t>(k)) {
       std::cerr << "bits must be >= k for coded simulation.\n";
       return 1;
@@ -168,8 +175,8 @@ int main(int argc, char **argv) {
   }
 
   if (options.r > 0) {
-    std::cout << "snr_db,ber_uncoded,ber_coded,ber_chase1,ber_chase2,ber_chase3,bit_errors_uncoded,bit_errors_coded,"
-              << "bit_errors_chase1,bit_errors_chase2,bit_errors_chase3,total_bits_coded\n";
+    std::cout << "snr_db,ber_uncoded,ber_coded,ber_chase1,ber_chase2,ber_chase3,ber_ml,bit_errors_uncoded,bit_errors_coded,"
+              << "bit_errors_chase1,bit_errors_chase2,bit_errors_chase3,bit_errors_ml,total_bits_coded\n";
   } else {
     std::cout << "snr_db,ber,bit_errors,total_bits\n";
   }
@@ -225,7 +232,12 @@ int main(int argc, char **argv) {
       std::vector<uint8_t> block(data.begin() + static_cast<std::ptrdiff_t>(i),
                                  data.begin() +
                                      static_cast<std::ptrdiff_t>(i + k));
-      std::vector<uint8_t> encoded = encoder->EncodeExtended(block);
+      std::vector<uint8_t> encoded;
+      if (options.extended) {
+        encoded = encoder->EncodeExtended(block);
+      } else {
+        encoded = encoder->Encode(block);
+      }          
       codeword.insert(codeword.end(), encoded.begin(), encoded.end());
     }
 
@@ -241,10 +253,12 @@ int main(int argc, char **argv) {
     std::vector<uint8_t> decoded_data1;
     std::vector<uint8_t> decoded_data2;
     std::vector<uint8_t> decoded_data3;
+    std::vector<uint8_t> decoded_data4;
     decoded_data.reserve(info_bits);
     decoded_data1.reserve(info_bits);
     decoded_data2.reserve(info_bits);
     decoded_data3.reserve(info_bits);
+    decoded_data4.reserve(info_bits);
     for (std::size_t i = 0; i < coded_demod.size();
          i += static_cast<std::size_t>(n)) {
       std::vector<double> cw(
@@ -259,25 +273,29 @@ int main(int argc, char **argv) {
                           decoded_block.begin(),
                           decoded_block.end());
 
-      std::vector<uint8_t> decoded_block1 = harq::DecodeWithChase(
+      std::vector<uint8_t> decoded_block1 = harq::DecodeHammingCodesWithChase(
           cw, harq::ProbeAlgorithm::First, harq::HammingDecoder(options.r));
       decoded_data1.insert(decoded_data1.end(), decoded_block1.begin(),
                            decoded_block1.end());
                            
-      std::vector<uint8_t> decoded_block2 = harq::DecodeWithChase(
+      std::vector<uint8_t> decoded_block2 = harq::DecodeHammingCodesWithChase(
           cw, harq::ProbeAlgorithm::Second, harq::HammingDecoder(options.r));
       decoded_data2.insert(decoded_data2.end(), decoded_block2.begin(),
                            decoded_block2.end());
 
-      std::vector<uint8_t> decoded_block3 = harq::DecodeWithChase(
+      std::vector<uint8_t> decoded_block3 = harq::DecodeHammingCodesWithChase(
           cw, harq::ProbeAlgorithm::Third, harq::HammingDecoder(options.r));
       decoded_data3.insert(decoded_data3.end(), decoded_block3.begin(),
                            decoded_block3.end());
+      std::vector<uint8_t> decoded_block4 = harq::DecodeHammingML(cw, harq::HammingDecoder(options.r));
+      decoded_data4.insert(decoded_data4.end(), decoded_block4.begin(),
+                           decoded_block4.end());
     }
     std::size_t coded_errors = 0;
     std::size_t coded_errors1 = 0;
     std::size_t coded_errors2 = 0;
     std::size_t coded_errors3 = 0;
+    std::size_t coded_errors4 = 0;
     for (std::size_t i = 0; i < info_bits; ++i) {
       if (decoded_data[i] != data[i]) {
         ++coded_errors;
@@ -291,6 +309,9 @@ int main(int argc, char **argv) {
       if (decoded_data3[i] != data[i]) {
         ++coded_errors3;
       }
+      if (decoded_data4[i] != data[i]) {
+        ++coded_errors4;
+      }
     }
 
     double ber_coded =
@@ -301,9 +322,12 @@ int main(int argc, char **argv) {
         static_cast<double>(coded_errors2) / static_cast<double>(info_bits);
     double ber_coded3 =
         static_cast<double>(coded_errors3) / static_cast<double>(info_bits);
-    std::cout << snr_db << "," << ber << "," << ber_coded << "," << ber_coded1 << "," << ber_coded2 << "," << ber_coded3 << "," << bit_errors << "," << coded_errors <<
-              "," << coded_errors1 << "," << coded_errors2 << "," << coded_errors3 << "," << info_bits
-              << "\n";
+    double ber_coded4 =
+        static_cast<double>(coded_errors4) / static_cast<double>(info_bits);
+    std::cout << snr_db << "," << ber << "," << ber_coded << "," << ber_coded1 << "," << ber_coded2 << ","
+     << ber_coded3 << "," << ber_coded4 << "," << bit_errors << "," << coded_errors <<
+              "," << coded_errors1 << "," << coded_errors2 << "," << coded_errors3 << "," 
+              << coded_errors4 << "," << info_bits  << "\n";
   }
 
   return 0;

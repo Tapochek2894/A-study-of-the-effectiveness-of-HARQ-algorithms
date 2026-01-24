@@ -23,6 +23,7 @@ Makefile
 *.exe
 *.lib
 *.pdb
+*.out
 
 # IDEs/editors
 .vscode/
@@ -36,3 +37,4 @@ compile_commands.json
 *.ninja
 .ninja_deps
 .ninja_log
+*.csv

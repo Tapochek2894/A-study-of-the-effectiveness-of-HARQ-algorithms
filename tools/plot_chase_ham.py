@@ -16,6 +16,7 @@ def load_csv(path: Path):
     ber_chase1 = []
     ber_chase2 = []
     ber_chase3 = []
+    ber_ml = []
     with path.open(newline="") as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames or []
@@ -35,7 +36,9 @@ def load_csv(path: Path):
                 ber_chase2.append(float(row["ber_chase2"]))
             if "ber_chase3" in fieldnames:
                 ber_chase3.append(float(row["ber_chase3"]))
-    return snr_vals, ber_vals, ber_uncoded, ber_coded, ber_chase1, ber_chase2, ber_chase3
+            if "ber_ml" in fieldnames:
+                ber_ml.append(float(row["ber_ml"]))
+    return snr_vals, ber_vals, ber_uncoded, ber_coded, ber_chase1, ber_chase2, ber_chase3, ber_ml
 
 
 def parse_args():
@@ -67,7 +70,7 @@ def main():
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
 
-    snr_vals, ber_vals, ber_uncoded, ber_coded, ber_chase1, ber_chase2, ber_chase3 = load_csv(csv_path)
+    snr_vals, ber_vals, ber_uncoded, ber_coded, ber_chase1, ber_chase2, ber_chase3, ber_ml = load_csv(csv_path)
 
     fig, ax = plt.subplots()
     if ber_vals:
@@ -82,6 +85,8 @@ def main():
         ax.plot(snr_vals, ber_chase2, marker="v", label="BER chase2")
     if ber_chase3:
         ax.plot(snr_vals, ber_chase3, marker="X", label="BER chase3")
+    if ber_ml:
+        ax.plot(snr_vals, ber_ml, marker="x", label="BER ML")
     ax.set_xlabel("SNR (dB)")
     ax.set_ylabel("BER")
     ax.set_title(args.title)

@@ -23,3 +23,9 @@ add_executable(ber_bler_sim
 )
 
 target_link_libraries(ber_bler_sim PRIVATE harq)
+
+add_executable(chase_ham_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/chase_ham_sim.cpp
+)
+
+target_link_libraries(chase_ham_sim PRIVATE harq)
