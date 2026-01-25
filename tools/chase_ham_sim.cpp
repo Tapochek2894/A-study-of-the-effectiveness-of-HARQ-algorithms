@@ -20,12 +20,12 @@ namespace {
 struct Options {
   std::size_t bits = 600000;
   uint32_t seed = 5489u;
-  std::vector<double> snr_list = {-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4};
+  std::vector<double> snr_list = {-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4};
   bool use_range = false;
-  double snr_start = -10.0;
+  double snr_start = -6.0;
   double snr_end = 4.0;
-  int snr_points = 15;
-  int r = 4;
+  int snr_points = 11;
+  int r = 3;
   bool extended = false;
 };
 
@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
   harq::BpskCarrierConfig config;
   config.carrier_hz = 2.0;
   config.sample_rate_hz = 32.0;
-  config.samples_per_symbol = 16;
+  config.samples_per_symbol = 4;
   config.amplitude = 1.0;
   config.phase = 0.0;
 

@@ -43,7 +43,7 @@ def load_csv(path: Path):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Plot BER vs SNR (dB) from CSV produced by bpsk_awgn_sim."
+        description="Plot BER vs SNR (dB) from CSV produced by chase_ham_sim."
     )
     parser.add_argument("csv_path", help="Path to CSV file")
     parser.add_argument(
