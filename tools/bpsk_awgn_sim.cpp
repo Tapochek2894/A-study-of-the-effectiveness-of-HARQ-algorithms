@@ -17,13 +17,13 @@
 namespace {
 
 struct Options {
-  std::size_t bits = 200000;
+  std::size_t bits = 600000;
   uint32_t seed = 5489u;
-  std::vector<double> snr_list = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  std::vector<double> snr_list = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
   bool use_range = false;
   double snr_start = 0.0;
-  double snr_end = 10.0;
-  int snr_points = 11;
+  double snr_end = 12.0;
+  int snr_points = 13;
   int r = 0;
 };
 
