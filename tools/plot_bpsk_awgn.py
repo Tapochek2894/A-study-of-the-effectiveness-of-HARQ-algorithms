@@ -3,9 +3,29 @@ import argparse
 import csv
 from pathlib import Path
 
+import math
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
+
+
+def q_function(x):
+    """Q-function: Q(x) = 0.5 * erfc(x / sqrt(2))"""
+    x = np.asarray(x)
+    return np.vectorize(lambda v: 0.5 * math.erfc(v / math.sqrt(2)))(x)
+
+
+def ber_bpsk_theory(snr_db):
+    """Theoretical BER for BPSK in AWGN.
+
+    For baseband BPSK with symbols ±1 and noise variance σ² = 1/SNR:
+    P_e = Q(sqrt(2*Eb/N0)) where Eb/N0 = SNR/2 for this implementation.
+    Therefore P_e = Q(sqrt(SNR)).
+    """
+    snr_linear = 10 ** (np.asarray(snr_db) / 10)
+    return q_function(np.sqrt(snr_linear))
 
 
 def load_csv(path: Path):
@@ -49,6 +69,11 @@ def parse_args():
         default="BER vs SNR (BPSK AWGN)",
         help="Plot title",
     )
+    parser.add_argument(
+        "--theory",
+        action="store_true",
+        help="Add theoretical BER curve: P_e = Q(sqrt(2*SNR))",
+    )
     return parser.parse_args()
 
 
@@ -62,11 +87,20 @@ def main():
 
     fig, ax = plt.subplots()
     if ber_vals:
-        ax.plot(snr_vals, ber_vals, marker="o", label="BER")
+        ax.plot(snr_vals, ber_vals, marker="o", label="BER (simulation)")
     if ber_uncoded:
         ax.plot(snr_vals, ber_uncoded, marker="o", label="BER uncoded")
     if ber_coded:
         ax.plot(snr_vals, ber_coded, marker="s", label="BER coded")
+
+    if args.theory:
+        snr_min = min(snr_vals)
+        snr_max = max(snr_vals)
+        snr_theory = np.linspace(snr_min, snr_max, 200)
+        ber_theory = ber_bpsk_theory(snr_theory)
+        ax.plot(snr_theory, ber_theory, 'r--', linewidth=1.5,
+                label="Theory")
+
     ax.set_xlabel("SNR (dB)")
     ax.set_ylabel("BER")
     ax.set_title(args.title)

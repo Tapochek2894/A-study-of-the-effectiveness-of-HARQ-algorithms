@@ -19,7 +19,7 @@ def main():
     num_symbols = sys.argv[3] if len(sys.argv) > 3 else "20000"
     carrier_hz = sys.argv[4] if len(sys.argv) > 4 else "1000"
     sample_rate_hz = sys.argv[5] if len(sys.argv) > 5 else "10000"
-    samples_per_symbol = sys.argv[6] if len(sys.argv) > 6 else "20"
+    samples_per_symbol = sys.argv[6] if len(sys.argv) > 6 else "4"
     amplitude = sys.argv[7] if len(sys.argv) > 7 else "1.0"
     phase = sys.argv[8] if len(sys.argv) > 8 else "0.0"
     seed = sys.argv[9] if len(sys.argv) > 9 else "5489"

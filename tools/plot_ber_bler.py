@@ -76,7 +76,7 @@ def main():
 
     if ber_theory_vals:
         ax.plot(p_vals, ber_theory_vals, linestyle="--",
-                label="BER theory (enumeration)")
+                label="BER theory")
 
     if args.r is not None:
         if args.r < 2:
@@ -87,7 +87,7 @@ def main():
             bler_theory.append(
                 1.0 - (1.0 - p) ** n - n * p * (1.0 - p) ** (n - 1)
             )
-        ax.plot(p_vals, bler_theory, linestyle="--", label=f"BLER theory (n={n})")
+        ax.plot(p_vals, bler_theory, linestyle="--", label="BLER theory")
     ax.set_xlabel("p")
     ax.set_ylabel("Probability")
     ax.set_title(args.title)
