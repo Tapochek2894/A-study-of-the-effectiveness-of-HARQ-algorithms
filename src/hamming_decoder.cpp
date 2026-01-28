@@ -23,6 +23,8 @@ int HammingDecoder::n() const { return n_; }
 
 int HammingDecoder::k() const { return k_; }
 
+int HammingDecoder::r() const { return r_; }
+
 std::vector<uint8_t> HammingDecoder::Correct(
     const std::vector<uint8_t>& codeword) const {
   if (static_cast<int>(codeword.size()) != n_ &&
