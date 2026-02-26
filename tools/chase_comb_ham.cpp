@@ -10,13 +10,12 @@
 #include <vector>
 #include <iomanip>
 
-const int N = 1000;
-const int r = 3;                        
+const int N = 5000;
+const int r = 3;
 const int MaximumAttempts = 10;
 const uint32_t seed = 5489u;
 const std::vector<double> snr_values = {
-    -20, -19, -18, -17, -16, -15, -14, -13, -12, -11, -10,
-    -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5
+    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 };
 
 enum class Mode {
@@ -35,7 +34,9 @@ double simulate_mode(double snr_db, Mode mode) {
     harq::HammingEncoder encoder(r);
     harq::HammingDecoder decoder(r);
 
-    std::vector<uint8_t> info_word = {1, 0, 1, 0};
+    int k = (1 << r) - 1 - r;
+    std::vector<uint8_t> info_word(k);
+    for (int i = 0; i < k; ++i) info_word[i] = static_cast<uint8_t>(i % 2);
     auto codeword = encoder.Encode(info_word);
 
     std::size_t total_retransmits = 0;
@@ -55,10 +56,10 @@ double simulate_mode(double snr_db, Mode mode) {
 
             if (mode == Mode::ChaseCombining) {
                 soft_history.push_back(soft_bits);
-                decision = harq::ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm::Full, decoder, soft_history);
+                decision = harq::ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm::Second, decoder, soft_history);
             } else {
                 decision = harq::DecodeHammingCodesWithChase(
-                    soft_bits, harq::ProbeAlgorithm::Full, decoder
+                    soft_bits, harq::ProbeAlgorithm::Second, decoder
                 );
             }
             bool error = false;
