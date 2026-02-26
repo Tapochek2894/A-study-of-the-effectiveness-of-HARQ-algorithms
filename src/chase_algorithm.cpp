@@ -200,7 +200,8 @@ double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
     double dist = 0.0;
     for (std::size_t i = 0; i < codeword.size(); ++i) {
         double symbol = codeword[i] ? 1.0 : -1.0;
-        dist += std::abs(symbol - soft_bits[i]);
+        double diff = symbol - soft_bits[i];
+        dist += diff * diff;
     }
     return dist;
 }
