@@ -1,6 +1,5 @@
 #include "awgn_channel.hpp"
 #include "bpsk.hpp"
-#include "bpsk_passband.hpp"
 #include "chase_combining.hpp"
 #include "hamming_decoder.hpp"
 #include "hamming_encoder.hpp"
@@ -18,19 +17,9 @@ const std::vector<double> snr_values = {
     -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 };
 
-enum class Mode {
-    ChaseCombining,
-    NoCombining
-};
-
-double simulate_mode(double snr_db, Mode mode) {
-    harq::BpskCarrierConfig config;
-    config.carrier_hz = 2.0;
-    config.sample_rate_hz = 32.0;
-    config.samples_per_symbol = 4;
-    config.amplitude = 1.0;
-    config.phase = 0.0;
-
+// Возвращает среднее число повторных передач.
+// probe == nullopt → без комбинирования (каждая попытка независима)
+double simulate(double snr_db, harq::ProbeAlgorithm algo, bool combining) {
     harq::HammingEncoder encoder(r);
     harq::HammingDecoder decoder(r);
 
@@ -38,45 +27,36 @@ double simulate_mode(double snr_db, Mode mode) {
     std::vector<uint8_t> info_word(k);
     for (int i = 0; i < k; ++i) info_word[i] = static_cast<uint8_t>(i % 2);
     auto codeword = encoder.Encode(info_word);
+    auto modulated = harq::BpskModulate(codeword);
 
     std::size_t total_retransmits = 0;
 
     for (int i = 0; i < N; ++i) {
-        auto modulated = harq::BpskModulate(codeword);
         std::vector<std::vector<double>> soft_history;
-
         int attempts = 0;
 
         for (int j = 0; j < MaximumAttempts; ++j) {
-            harq::AwgnChannel channel(snr_db, static_cast<uint32_t>(seed + i * MaximumAttempts + j * j * j));
-            auto noisy = channel.AddNoise(modulated);
-            auto soft_bits = noisy;
+            harq::AwgnChannel channel(snr_db,
+                static_cast<uint32_t>(seed + i * MaximumAttempts + j * j * j));
+            auto soft_bits = channel.AddNoise(modulated);
 
             std::vector<uint8_t> decision;
-
-            if (mode == Mode::ChaseCombining) {
+            if (combining) {
                 soft_history.push_back(soft_bits);
-                decision = harq::ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm::Second, decoder, soft_history);
+                decision = harq::ChaseCombiningHammingNoCRC(algo, decoder, soft_history);
             } else {
-                decision = harq::DecodeHammingCodesWithChase(
-                    soft_bits, harq::ProbeAlgorithm::Second, decoder
-                );
-            }
-            bool error = false;
-            for (std::size_t idx = 0; idx < info_word.size(); ++idx) {
-                if (decision[idx] != info_word[idx]) {
-                    error = true;
-                }
+                decision = harq::DecodeHammingCodesWithChase(soft_bits, algo, decoder);
             }
 
             attempts = j + 1;
-
-            if (!error) {
-                break;
+            bool error = false;
+            for (std::size_t idx = 0; idx < info_word.size(); ++idx) {
+                if (decision[idx] != info_word[idx]) { error = true; break; }
             }
+            if (!error) break;
         }
 
-        total_retransmits += (attempts - 1);
+        total_retransmits += static_cast<std::size_t>(attempts - 1);
     }
 
     return static_cast<double>(total_retransmits) / static_cast<double>(N);
@@ -84,12 +64,23 @@ double simulate_mode(double snr_db, Mode mode) {
 
 int main() {
     std::cout << std::fixed << std::setprecision(6);
-    std::cout << "snr_db,chase_combining,no_combining" << std::endl;
+    std::cout << "snr_db,"
+              << "chase1_combining,chase2_combining,chase3_combining,"
+              << "chase1_no_comb,chase2_no_comb,chase3_no_comb"
+              << std::endl;
 
     for (auto snr_db : snr_values) {
-        double avg_chase = simulate_mode(snr_db, Mode::ChaseCombining);
-        double avg_no_comb = simulate_mode(snr_db, Mode::NoCombining);
-        std::cout << snr_db << "," << avg_chase << "," << avg_no_comb << std::endl;
+        double c1  = simulate(snr_db, harq::ProbeAlgorithm::First,  true);
+        double c2  = simulate(snr_db, harq::ProbeAlgorithm::Second, true);
+        double c3  = simulate(snr_db, harq::ProbeAlgorithm::Third,  true);
+        double nc1 = simulate(snr_db, harq::ProbeAlgorithm::First,  false);
+        double nc2 = simulate(snr_db, harq::ProbeAlgorithm::Second, false);
+        double nc3 = simulate(snr_db, harq::ProbeAlgorithm::Third,  false);
+
+        std::cout << snr_db << ","
+                  << c1  << "," << c2  << "," << c3  << ","
+                  << nc1 << "," << nc2 << "," << nc3
+                  << std::endl;
     }
 
     return 0;
