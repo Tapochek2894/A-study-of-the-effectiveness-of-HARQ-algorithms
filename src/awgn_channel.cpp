@@ -71,4 +71,25 @@ void AwgnChannel::UpdateSigma() {
   sigma_ = std::sqrt(sigma2_);
 }
 
+std::vector<std::complex<double>>
+AwgnChannel::TransmitComplex(const std::vector<std::complex<double>>& symbols) {
+    std::mt19937 random_generator(seed_);
+    std::normal_distribution<double> dist(0.0, sigma_);
+    double snr_linear = std::pow(10.0, snr_db_ / 10.0);
+    
+    sigma_ = std::sqrt(1.0 / (2.0 * snr_linear));
+    std::vector<std::complex<double>> noisy_symbols;
+    noisy_symbols.reserve(symbols.size());
+
+    std::normal_distribution<double> noise(0.0, sigma_);
+
+    for (const auto& symbol : symbols) {
+        double noise_re = noise(random_generator);
+        double noise_im = noise(random_generator);
+        noisy_symbols.emplace_back(symbol.real() + noise_re, symbol.imag() + noise_im);
+    }
+
+    return noisy_symbols;
+}
+
 }  // namespace harq
