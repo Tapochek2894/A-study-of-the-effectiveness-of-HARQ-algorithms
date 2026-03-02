@@ -5,6 +5,7 @@
 #include <limits>
 #include "hamming_encoder.hpp"
 #include <iostream>
+
 namespace harq {
 
 std::vector<std::vector<uint8_t>> generate_probe_sequences_1(int n, int d) {
@@ -171,6 +172,9 @@ CalculateCandidates(const std::vector<uint8_t> &message, int r, int d,
   case ProbeAlgorithm::Third:
     ProbeSeqs = generate_probe_sequences_3(message.size(), d, reliability);
     break;
+  case ProbeAlgorithm::Full:
+    ProbeSeqs = generate_probe_sequences_ml(message.size(), d, r);
+    break;
   default:
     throw std::invalid_argument("Wrong probe algorithm chosen");
   }
@@ -196,7 +200,8 @@ double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
     double dist = 0.0;
     for (std::size_t i = 0; i < codeword.size(); ++i) {
         double symbol = codeword[i] ? 1.0 : -1.0;
-        dist += std::abs(symbol - soft_bits[i]);
+        double diff = symbol - soft_bits[i];
+        dist += diff * diff;
     }
     return dist;
 }
@@ -318,6 +323,36 @@ std::vector<uint8_t> DecodeHammingML(
     }
 
     return best_info;
+}
+
+std::vector<std::vector<uint8_t>>generate_probe_sequences_ml(int n, int d, int r) {
+    int k = n - r;
+
+    bool extended = n % 2 == 0;
+    std::vector<std::vector<uint8_t>> values;
+    HammingEncoder encoder(r);
+
+    std::vector<uint8_t> best_info;
+    double min_distance = std::numeric_limits<double>::max();
+
+    std::size_t total_info_words = static_cast<std::size_t>(1) << k;
+
+    for (std::size_t idx = 0; idx < total_info_words; ++idx) {
+        std::vector<uint8_t> info_word(k);
+        for (int i = 0; i < k; ++i) {
+            info_word[i] = static_cast<uint8_t>((idx >> i) & 1);
+        }
+
+        std::vector<uint8_t> codeword;
+        if (extended) {
+            codeword = encoder.EncodeExtended(info_word);
+        } else {
+            codeword = encoder.Encode(info_word);
+        }
+        values.push_back(codeword);
+    }
+
+    return values;
 }
 
 } // namespace harq

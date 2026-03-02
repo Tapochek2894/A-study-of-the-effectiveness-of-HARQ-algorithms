@@ -1,52 +1,38 @@
 #pragma once
 
-#include "hamming_decoder.hpp"
-#include <cstdint>
 #include <vector>
+#include <cstdint>
+#include "hamming_decoder.hpp"
 
 namespace harq {
 
-const int HAMMING_CODE_DISTANCE = 3;
-const int EXTENDED_HAMMING_CODE_DISTANCE = 4;
+enum class ProbeAlgorithm {
+    First,
+    Second,
+    Third,
+    Full
+};
 
-enum class ProbeAlgorithm { First, Second, Third };
+const int EXTENDED_HAMMING_CODE_DISTANCE = 4;
+const int HAMMING_CODE_DISTANCE = 3;
 
 std::vector<std::vector<uint8_t>> generate_probe_sequences_1(int n, int d);
+std::vector<std::vector<uint8_t>> generate_probe_sequences_2(int n, int d, const std::vector<double>& reliability);
+std::vector<std::vector<uint8_t>> generate_probe_sequences_3(int n, int d, const std::vector<double>& reliability);
+std::vector<std::vector<uint8_t>> generate_probe_sequences_ml(int n, int d, int r);
 
-std::vector<std::vector<uint8_t>>
-generate_probe_sequences_2(int n, int d,
-                           const std::vector<double> &reliability);
+std::vector<uint8_t> AddErrorVector(const std::vector<uint8_t>& data, const std::vector<uint8_t>& error);
+std::vector<std::size_t> get_n_smallest_indices(const std::vector<double>& soft_decisions, int n);
+std::vector<std::vector<uint8_t>> CalculateCandidates(
+    const std::vector<uint8_t>& message, int r, int d,
+    const std::vector<double>& reliability, ProbeAlgorithm algorithm);
 
-std::vector<std::vector<uint8_t>>
-generate_probe_sequences_3(int n, int d,
-                           const std::vector<double> &reliability);
-
-std::vector<uint8_t> AddErrorVector(const std::vector<uint8_t> &DataVector,
-                                    const std::vector<uint8_t> &ErrorVector);
-
-std::vector<std::vector<uint8_t>>
-CalculateCandidates(const std::vector<uint8_t> &message, int d,
-                    const std::vector<double> &reliability,
-                    ProbeAlgorithm algorithm);
-
-std::pair<double, std::vector<uint8_t>>
-CalculateDistance(std::vector<uint8_t> candidate,
-                  std::vector<double> SoftDecisions);
-
-std::vector<std::size_t> get_n_smallest_indices(const std::vector<double> &values,
-                                           int n);
+double ComputeSoftDistance(const std::vector<uint8_t>& codeword, const std::vector<double>& soft_bits);
 
 std::vector<uint8_t> DecodeHammingCodesWithChase(
-    const std::vector<double>& ReceivedSoftBits,
-    harq::ProbeAlgorithm probe_algorithm,
-    harq::HammingDecoder decoder);
-
-inline bool IsPowerOfTwo(std::size_t n);
-
-double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
-                           const std::vector<double>& soft_bits);
-
-int GetCodeDistance(std::size_t received_size);
+    const std::vector<double>& received_soft_bits,
+    ProbeAlgorithm probe_algorithm,
+    HammingDecoder decoder);
 
 std::vector<uint8_t> DecodeHammingML(
     const std::vector<double>& soft_bits,
