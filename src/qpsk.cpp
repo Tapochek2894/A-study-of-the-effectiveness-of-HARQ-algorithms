@@ -46,7 +46,7 @@ std::vector<double> QpskDemodulator::Demodulate(const std::vector<std::complex<d
 }
 
 
-std::vector<double> BpskDemodulate(const std::vector<std::complex<double>>& symbols, double snr_db) {
+std::vector<double> QpskDemodulate(const std::vector<std::complex<double>>& symbols, double snr_db) {
   return QpskDemodulator{}.Demodulate(symbols, snr_db);
 }
 

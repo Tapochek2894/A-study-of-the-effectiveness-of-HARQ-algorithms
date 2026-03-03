@@ -41,3 +41,9 @@ add_executable(chase_comb_ham
 )
 
 target_link_libraries(chase_comb_ham PRIVATE harq)
+
+add_executable(qpsk_bpsk_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/qpsk_bpsk.cpp
+)
+
+target_link_libraries(qpsk_bpsk_sim PRIVATE harq)
