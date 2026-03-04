@@ -30,6 +30,9 @@ class BpskPassbandDemodulator {
   std::vector<uint8_t> Demodulate(
       const std::vector<double>& samples) const;
 
+  std::vector<double> DemodulateSoft(
+      const std::vector<double>& samples) const;
+
  private:
   BpskCarrierConfig config_;
 };
@@ -39,6 +42,10 @@ std::vector<double> BpskPassbandModulate(
     BpskCarrierConfig config);
 
 std::vector<uint8_t> BpskPassbandDemodulate(
+    const std::vector<double>& samples,
+    BpskCarrierConfig config);
+
+std::vector<double> BpskPassbandDemodulateSoft(
     const std::vector<double>& samples,
     BpskCarrierConfig config);
 

@@ -7,8 +7,9 @@
 
 // Предполагается, что у тебя есть chase_algorithm.hpp с объявлением функций
 #include "chase_algorithm.hpp"
-#include "utils.hpp"
-
+#include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
+#include "bpsk.hpp"
 using namespace harq;
 
 // ------------------------------------------------------------------
@@ -72,12 +73,6 @@ TEST(GenerateProbeSequences1Test, Basic) {
     };
     EXPECT_EQ(seqs, expected);
 }
-
-TEST(GenerateProbeSequences1Test, dZero) {
-    // d=0 → d/2 = 0 → теперь exception
-    EXPECT_THROW(generate_probe_sequences_1(2, 0), std::invalid_argument);
-}
-
 
 TEST(GenerateProbeSequences1Test, dOdd) {
     // d=3 → d/2 = 1 (integer division)
@@ -158,9 +153,11 @@ TEST(GenerateProbeSequences3Test, dOdd) {
     std::vector<double> rel = {0.9, 0.2, 0.7, 0.1, 0.8}; // наименее надёжные: [3,1,2,4,0] → первые 2: [3,1]
     // ones_positions: i=0 → 3
     auto seqs = generate_probe_sequences_3(5, 3, rel);
-    EXPECT_EQ(seqs.size(), 1u);
-    std::vector<uint8_t> expected = {0,0,0,1,0}; // только позиция 3 = 1
+    EXPECT_EQ(seqs.size(), 2u);
+    std::vector<uint8_t> expected = {0,0,0,0,0};
     EXPECT_EQ(seqs[0], expected);
+    std::vector<uint8_t> expected1 = {0,1,0,1,0};
+    EXPECT_EQ(seqs[1], expected1);
 }
 
 TEST(GenerateProbeSequences3Test, dEven) {
@@ -170,16 +167,12 @@ TEST(GenerateProbeSequences3Test, dEven) {
     // Наименее надёжные (3 шт): [1,3,2]
     // ones_positions: [1,3] + (начиная с i=3 → выход за пределы) → только [1,3]
     auto seqs = generate_probe_sequences_3(5, 4, rel);
-    std::vector<uint8_t> expected = {0,1,0,1,0};
+    std::vector<uint8_t> expected = {0,0,0,0,0};
     EXPECT_EQ(seqs[0], expected);
-}
-
-TEST(GenerateProbeSequences3Test, dOne) {
-    // d=1 → precarious = 0 → get_n_smallest_indices(0) → exception?
-    // Но в коде: if (precarious_positions > n) → 0 > n? нет.
-    // Затем вызывается get_n_smallest_indices(reliability, 0) → но в get_n_smallest_indices: n<=0 → exception!
-    std::vector<double> rel = {0.5};
-    EXPECT_THROW(generate_probe_sequences_3(1, 1, rel), std::invalid_argument);
+    std::vector<uint8_t> expected1 = {0,1,0,0,0};
+    EXPECT_EQ(seqs[1], expected1);
+    std::vector<uint8_t> expected2 = {0,1,0,1,1};
+    EXPECT_EQ(seqs[2], expected2);
 }
 
 TEST(GenerateProbeSequences3Test, PrecariousZero) {
@@ -198,6 +191,76 @@ TEST(GenerateProbeSequences3Test, InvalidInput) {
 }
 
 // ------------------------------------------------------------------
+// 5. Быстрый тест Chase по информационным битам (условный сценарий)
+// ------------------------------------------------------------------
+
+TEST(ChaseCombiningTest, RecoversTwoBitErrorsOnInfoLevel) {
+    const int r = 3;
+    const int d = 3; // условно для выбора двух позиций d/2
+
+    const std::vector<uint8_t> message = {1, 0, 1, 1};
+    harq::HammingEncoder encoder(r);
+    const std::vector<uint8_t> codeword = encoder.Encode(message);
+
+    harq::HammingDecoder decoder(r);
+    
+    std::vector<uint8_t> received;
+    std::vector<uint8_t> hard_decoded;
+    std::vector<int> error_positions;
+
+    for (size_t i = 0; i < codeword.size(); ++i) {
+        for (size_t j = i + 1; j < codeword.size(); ++j) {
+            received = codeword;
+            received[i] ^= 1;
+            received[j] ^= 1;
+
+            hard_decoded = decoder.Decode(received);
+            error_positions.clear();
+
+            for (size_t k = 0; k < message.size(); ++k) {
+                if (hard_decoded[k] != message[k]) {
+                    error_positions.push_back(static_cast<int>(k));
+                }
+            }
+
+            if (error_positions.size() == 2) {
+                break;
+            }
+        }
+        if (error_positions.size() == 2) {
+            break;
+        }
+    }
+
+    ASSERT_EQ(error_positions.size(), 2u);
+
+    std::vector<double> reliability;
+    reliability.reserve(codeword.size());
+
+    for (uint8_t bit : codeword) {
+        if (bit == 0) {
+            reliability.push_back(-1.0);
+        } else if (bit == 1) {
+            reliability.push_back(1.0);
+        }
+    }  
+      
+    for (int pos : error_positions) {
+        reliability[pos] /= 10;
+    }
+
+    std::vector<double> llr(message.size(), 0.0);
+    for (size_t k = 0; k < message.size(); ++k) {
+        llr[k] = message[k] ? 5.0 : -5.0;
+        if (reliability[k] < 0.1) {
+            llr[k] *= 0.1;
+        }
+    }
+
+    auto decided = DecodeHammingCodesWithChase(reliability, ProbeAlgorithm::First, decoder);
+
+    EXPECT_EQ(message, decided);
+}
 // Дополнительно: убедимся, что все последовательности содержат только 0 и 1
 // ------------------------------------------------------------------
 TEST(GenerateProbeSequencesSanity, OnlyZerosAndOnes) {

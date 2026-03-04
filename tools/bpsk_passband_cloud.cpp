@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
   const double snr_db = (argc > 3) ? std::stod(argv[3]) : 6.0;
   const double carrier_hz = (argc > 4) ? std::stod(argv[4]) : 1000.0;
   const double sample_rate_hz = (argc > 5) ? std::stod(argv[5]) : 10000.0;
-  const int samples_per_symbol = (argc > 6) ? std::stoi(argv[6]) : 20;
+  const int samples_per_symbol = (argc > 6) ? std::stoi(argv[6]) : 4;
   const double amplitude = (argc > 7) ? std::stod(argv[7]) : 1.0;
   const double phase = (argc > 8) ? std::stod(argv[8]) : 0.0;
   const uint32_t seed = (argc > 9) ? static_cast<uint32_t>(std::stoul(argv[9]))
