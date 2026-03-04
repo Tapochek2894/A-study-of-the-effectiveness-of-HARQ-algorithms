@@ -98,7 +98,7 @@ def main() -> None:
         print("All panels disabled.", file=sys.stderr)
         sys.exit(1)
 
-    fig, axes = plt.subplots(1, len(panels), figsize=(5 * len(panels), 5))
+    fig, axes = plt.subplots(1, len(panels), figsize=(9 * len(panels), 6))
     if len(panels) == 1:
         axes = [axes]
 
