@@ -1,7 +1,9 @@
 #include "chase_algorithm.hpp"
 #include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
 #include "utils.hpp"
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 namespace harq {
@@ -174,4 +176,79 @@ std::vector<uint8_t> MakeDecision(std::vector<std::vector<uint8_t>> candidates,
             [](const auto &a, const auto &b) { return a.first < b.first; });
   return distances[0].second;
 }
+
+double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
+                           const std::vector<double>& soft_bits) {
+  double dist = 0.0;
+  for (std::size_t i = 0; i < codeword.size(); ++i) {
+    double symbol = codeword[i] ? 1.0 : -1.0;
+    double diff = symbol - soft_bits[i];
+    dist += diff * diff;
+  }
+  return dist;
+}
+
+std::vector<uint8_t> DecodeHammingCodesWithChase(
+    const std::vector<double>& received_soft_bits,
+    ProbeAlgorithm probe_algorithm,
+    HammingDecoder decoder) {
+  if (received_soft_bits.empty()) {
+    throw std::invalid_argument("received_soft_bits must not be empty");
+  }
+
+  const int r = decoder.r();
+  const int d = HAMMING_CODE_DISTANCE;
+  HammingEncoder encoder(r);
+
+  // Жёсткие решения и надёжности
+  const int n = static_cast<int>(received_soft_bits.size());
+  std::vector<uint8_t> hard_bits(n);
+  for (int i = 0; i < n; ++i) {
+    hard_bits[i] = received_soft_bits[i] >= 0.0 ? 1 : 0;
+  }
+
+  // Генерируем пробные последовательности на n позициях
+  std::vector<std::vector<uint8_t>> probe_seqs;
+  switch (probe_algorithm) {
+    case ProbeAlgorithm::First:
+      probe_seqs = generate_probe_sequences_1(n, d);
+      break;
+    case ProbeAlgorithm::Second:
+      probe_seqs = generate_probe_sequences_2(n, d, received_soft_bits);
+      break;
+    case ProbeAlgorithm::Third:
+      probe_seqs = generate_probe_sequences_3(n, d, received_soft_bits);
+      break;
+    default:
+      throw std::invalid_argument("Unknown probe algorithm");
+  }
+
+  // Для каждой пробной последовательности: добавляем к жёстким битам → декодируем → перекодируем
+  std::vector<std::vector<uint8_t>> cand_info;
+  std::vector<std::vector<uint8_t>> cand_cw;
+  cand_info.reserve(probe_seqs.size());
+  cand_cw.reserve(probe_seqs.size());
+
+  for (const auto& probe : probe_seqs) {
+    auto perturbed = AddErrorVector(hard_bits, probe);
+    auto info = decoder.Decode(perturbed);
+    auto cw = encoder.Encode(info);
+    cand_info.push_back(std::move(info));
+    cand_cw.push_back(std::move(cw));
+  }
+
+  // Выбираем кандидата с минимальным мягким расстоянием
+  std::size_t best = 0;
+  double min_dist = std::numeric_limits<double>::max();
+  for (std::size_t i = 0; i < cand_cw.size(); ++i) {
+    double dist = ComputeSoftDistance(cand_cw[i], received_soft_bits);
+    if (dist < min_dist) {
+      min_dist = dist;
+      best = i;
+    }
+  }
+
+  return cand_info[best];
+}
+
 } // namespace harq
