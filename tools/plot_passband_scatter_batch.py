@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--num-symbols", default="20000")
     parser.add_argument("--carrier-hz", default="1000")
     parser.add_argument("--sample-rate-hz", default="10000")
-    parser.add_argument("--samples-per-symbol", default="20")
+    parser.add_argument("--samples-per-symbol", default="4")
     parser.add_argument("--amplitude", default="1.0")
     parser.add_argument("--phase", default="0.0")
     parser.add_argument("--seed", default="5489")

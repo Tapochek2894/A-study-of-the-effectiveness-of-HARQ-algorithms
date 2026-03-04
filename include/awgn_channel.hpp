@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <utility>
 #include <vector>
+#include <complex>
 
 namespace harq {
 
@@ -23,6 +24,8 @@ class AwgnChannel {
   // Полная передача: шум + LLR.
   std::pair<std::vector<double>, std::vector<double>> Transmit(
       const std::vector<double>& symbols);
+
+  std::vector<std::complex<double>> TransmitComplex(const std::vector<std::complex<double>>& symbols);
 
  private:
   void UpdateSigma();

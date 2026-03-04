@@ -1,9 +1,10 @@
 #include "awgn_channel.hpp"
-#include "bpsk.hpp"
+#include "qpsk.hpp"           // ← QPSK вместо BPSK
 #include "hamming_decoder.hpp"
 #include "hamming_encoder.hpp"
 
 #include <cmath>
+#include <complex>            // ← для std::complex
 #include <cstdint>
 #include <cstdlib>
 #include <iomanip>
@@ -40,19 +41,13 @@ bool ParseSnrList(const std::string& value, std::vector<double>* out) {
   std::stringstream ss(value);
   std::string token;
   while (std::getline(ss, token, ',')) {
-    if (token.empty()) {
-      return false;
-    }
+    if (token.empty()) return false;
     char* endptr = nullptr;
     double v = std::strtod(token.c_str(), &endptr);
-    if (endptr == token.c_str()) {
-      return false;
-    }
+    if (endptr == token.c_str()) return false;
     parsed.push_back(v);
   }
-  if (parsed.empty()) {
-    return false;
-  }
+  if (parsed.empty()) return false;
   *out = std::move(parsed);
   return true;
 }
@@ -65,9 +60,7 @@ bool ParseArgs(int argc, char** argv, Options* options) {
     } else if (arg == "--seed" && i + 1 < argc) {
       options->seed = static_cast<uint32_t>(std::stoul(argv[++i]));
     } else if (arg == "--snr" && i + 1 < argc) {
-      if (!ParseSnrList(argv[++i], &options->snr_list)) {
-        return false;
-      }
+      if (!ParseSnrList(argv[++i], &options->snr_list)) return false;
       options->use_range = false;
     } else if (arg == "--snr-start" && i + 1 < argc) {
       options->snr_start = std::stod(argv[++i]);
@@ -88,6 +81,13 @@ bool ParseArgs(int argc, char** argv, Options* options) {
     }
   }
   return true;
+}
+
+// Преобразование LLR → жёсткое решение
+// Конвенция: LLR > 0 → бит 1, LLR < 0 → бит 0
+// (соответствует вашей реализации ComputeLlr с отрицательным знаком)
+inline uint8_t LlrToBit(double llr) {
+  return (llr >= 0.0) ? 1 : 0;
 }
 
 }  // namespace
@@ -112,7 +112,6 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
-
   if (options.r != 0 && options.r < 2) {
     std::cerr << "r must be >= 2 for Hamming code.\n";
     return 1;
@@ -124,19 +123,17 @@ int main(int argc, char** argv) {
     for (int i = 0; i < options.snr_points; ++i) {
       double t = static_cast<double>(i) /
           static_cast<double>(options.snr_points - 1);
-      double value =
-          options.snr_start + t * (options.snr_end - options.snr_start);
-      snr_values.push_back(value);
+      snr_values.push_back(options.snr_start + 
+                          t * (options.snr_end - options.snr_start));
     }
   }
 
   std::mt19937 rng(options.seed);
   std::uniform_int_distribution<int> bit_dist(0, 1);
 
-  int k = 0;
-  int n = 0;
+  int k = 0, n = 0;
   if (options.r > 0) {
-    n = (1 << options.r) - 1;
+    n = (1 << options.r) - 1;  // всегда нечётное
     k = n - options.r;
     if (options.bits < static_cast<std::size_t>(k)) {
       std::cerr << "bits must be >= k for coded simulation.\n";
@@ -146,18 +143,19 @@ int main(int argc, char** argv) {
 
   std::size_t info_bits = options.bits;
   if (options.r > 0) {
-    info_bits = (options.bits / static_cast<std::size_t>(k)) *
-        static_cast<std::size_t>(k);
+    info_bits = (options.bits / static_cast<std::size_t>(k)) * 
+                static_cast<std::size_t>(k);
     if (info_bits == 0) {
       std::cerr << "bits must be >= k for coded simulation.\n";
       return 1;
     }
     if (info_bits != options.bits) {
-      std::cerr << "Warning: trimming bits to " << info_bits
+      std::cerr << "Warning: trimming bits to " << info_bits 
                 << " to fit k=" << k << ".\n";
     }
   }
 
+  // Заголовок CSV
   if (options.r > 0) {
     std::cout << "snr_db,ber_uncoded,ber_coded,bit_errors_uncoded,"
               << "bit_errors_coded,total_bits_uncoded,total_bits_coded\n";
@@ -166,8 +164,10 @@ int main(int argc, char** argv) {
   }
   std::cout << std::setprecision(8) << std::fixed;
 
-  harq::BpskModulator modulator;
-  harq::BpskDemodulator demodulator;
+  // === Инициализация QPSK-компонентов ===
+  harq::QpskModulator modulator;
+  harq::QpskDemodulator demodulator;
+  
   std::unique_ptr<harq::HammingEncoder> encoder;
   std::unique_ptr<harq::HammingDecoder> decoder;
   if (options.r > 0) {
@@ -181,75 +181,105 @@ int main(int argc, char** argv) {
       std::cerr << "Invalid SNR value: " << snr_db << "\n";
       return 1;
     }
-    harq::AwgnChannel channel(snr_db,
+    
+    harq::AwgnChannel channel(snr_db, 
                               static_cast<uint32_t>(options.seed + idx));
 
+    // Генерация данных
     std::vector<uint8_t> data(info_bits, 0);
     for (std::size_t i = 0; i < info_bits; ++i) {
       data[i] = static_cast<uint8_t>(bit_dist(rng));
     }
 
-    std::vector<double> symbols = modulator.Modulate(data);
-    std::vector<double> received = channel.AddNoise(symbols);
-    std::vector<uint8_t> decoded = demodulator.Demodulate(received);
+    // === UNCODED QPSK ===
+    // QPSK требует чётного числа бит
+    std::size_t uncoded_bits = info_bits - (info_bits % 2);
+    if (uncoded_bits != info_bits) {
+      std::cerr << "Warning: trimmed 1 bit for QPSK alignment (uncoded).\n";
+    }
+    
+    std::vector<uint8_t> uncoded_data(data.begin(), 
+                                      data.begin() + uncoded_bits);
+    
+    // Модуляция: bits → complex symbols
+    std::vector<std::complex<double>> symbols = modulator.Modulate(uncoded_data);
+    
+    std::vector<std::complex<double>> received = channel.TransmitComplex(symbols);
+    
+    // Демодуляция: complex symbols → LLR (soft values)
+    std::vector<double> llrs = demodulator.Demodulate(received, snr_db);
+    
+    // Жёсткие решения для BER: LLR → bit
+    std::vector<uint8_t> decoded;
+    decoded.reserve(llrs.size());
+    for (double llr : llrs) {
+      decoded.push_back(LlrToBit(llr));
+    }
 
     std::size_t bit_errors = 0;
-    for (std::size_t i = 0; i < info_bits; ++i) {
-      if (decoded[i] != data[i]) {
-        ++bit_errors;
-      }
+    for (std::size_t i = 0; i < uncoded_bits; ++i) {
+      if (decoded[i] != uncoded_data[i]) ++bit_errors;
     }
-
-    double ber = static_cast<double>(bit_errors) /
-        static_cast<double>(info_bits);
+    double ber = static_cast<double>(bit_errors) / uncoded_bits;
 
     if (options.r == 0) {
-      std::cout << snr_db << "," << ber << "," << bit_errors << ","
-                << info_bits << "\n";
+      std::cout << snr_db << "," << ber << "," << bit_errors << "," 
+                << uncoded_bits << "\n";
       continue;
     }
-
     std::vector<uint8_t> codeword;
-    codeword.reserve((info_bits / static_cast<std::size_t>(k)) *
-        static_cast<std::size_t>(n));
+    std::size_t num_blocks = info_bits / static_cast<std::size_t>(k);
+    codeword.reserve(num_blocks * static_cast<std::size_t>(n));
+    
     for (std::size_t i = 0; i < info_bits; i += static_cast<std::size_t>(k)) {
-      std::vector<uint8_t> block(
-          data.begin() + static_cast<std::ptrdiff_t>(i),
-          data.begin() + static_cast<std::ptrdiff_t>(i + k));
+      std::vector<uint8_t> block(data.begin() + i, data.begin() + i + k);
       std::vector<uint8_t> encoded = encoder->Encode(block);
       codeword.insert(codeword.end(), encoded.begin(), encoded.end());
     }
 
-    std::vector<double> coded_symbols = modulator.Modulate(codeword);
-    std::vector<double> coded_received = channel.AddNoise(coded_symbols);
-    std::vector<uint8_t> coded_demod =
-        demodulator.Demodulate(coded_received);
+    bool dummy_added = false;
+    if (codeword.size() % 2 != 0) {
+      codeword.push_back(0);  // dummy bit
+      dummy_added = true;
+    }
+    
+    std::vector<std::complex<double>> coded_symbols = modulator.Modulate(codeword);
+    std::vector<std::complex<double>> coded_received = channel.TransmitComplex(coded_symbols);
+    std::vector<double> coded_llrs = demodulator.Demodulate(coded_received, snr_db);
+    
+    std::vector<uint8_t> coded_hard;
+    coded_hard.reserve(coded_llrs.size());
+    for (double llr : coded_llrs) {
+      coded_hard.push_back(LlrToBit(llr));
+    }
+    
+    if (dummy_added && !coded_hard.empty()) {
+      coded_hard.pop_back();
+    }
 
     std::vector<uint8_t> decoded_data;
     decoded_data.reserve(info_bits);
-    for (std::size_t i = 0; i < coded_demod.size();
-         i += static_cast<std::size_t>(n)) {
-      std::vector<uint8_t> cw(
-          coded_demod.begin() + static_cast<std::ptrdiff_t>(i),
-          coded_demod.begin() + static_cast<std::ptrdiff_t>(i + n));
+    
+    for (std::size_t i = 0; i + n <= coded_hard.size(); i += n) {
+      std::vector<uint8_t> cw(coded_hard.begin() + i, 
+                              coded_hard.begin() + i + n);
       std::vector<uint8_t> decoded_block = decoder->Decode(cw);
-      decoded_data.insert(decoded_data.end(),
-                          decoded_block.begin(),
+      decoded_data.insert(decoded_data.end(), 
+                          decoded_block.begin(), 
                           decoded_block.end());
     }
 
     std::size_t coded_errors = 0;
-    for (std::size_t i = 0; i < info_bits; ++i) {
-      if (decoded_data[i] != data[i]) {
-        ++coded_errors;
-      }
+    std::size_t compared_bits = std::min(info_bits, decoded_data.size());
+    for (std::size_t i = 0; i < compared_bits; ++i) {
+      if (decoded_data[i] != data[i]) ++coded_errors;
     }
+    double ber_coded = static_cast<double>(coded_errors) / compared_bits;
 
-    double ber_coded = static_cast<double>(coded_errors) /
-        static_cast<double>(info_bits);
+    // Вывод результатов
     std::cout << snr_db << "," << ber << "," << ber_coded << ","
-              << bit_errors << "," << coded_errors << "," << info_bits << ","
-              << info_bits << "\n";
+              << bit_errors << "," << coded_errors << "," 
+              << uncoded_bits << "," << compared_bits << "\n";
   }
 
   return 0;
