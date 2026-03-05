@@ -21,6 +21,7 @@ import csv
 import itertools
 import math
 from pathlib import Path
+from scipy.special import erfc
 
 import matplotlib
 matplotlib.use("Agg")
@@ -31,6 +32,12 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # GF(2) арифметика
 # ---------------------------------------------------------------------------
+
+def snr_db_to_ber(snr_db: float) -> float:
+    """BER для BPSK в AWGN: p = Q(sqrt(2*Eb/N0)) = 0.5*erfc(sqrt(Eb/N0))."""
+    eb_n0 = 10 ** (snr_db / 10.0)
+    return 0.5 * erfc(math.sqrt(eb_n0))
+
 
 def poly_mod_gf2(dividend: list[int], divisor: list[int]) -> list[int]:
     """Остаток от деления dividend на divisor в GF(2)."""
@@ -268,16 +275,17 @@ def main() -> None:
     print(f"Saved: {out3}")
 
     # ---------------------------------------------------------------------------
-    # График 4: распределение P(N=k) при нескольких значениях p
+    # График 4: распределение P(N=k) при нескольких значениях SNR
     # ---------------------------------------------------------------------------
-    p_samples = [1e-3, 1e-2, 5e-2, 0.1]
-    fig, axes = plt.subplots(1, len(p_samples), figsize=(4 * len(p_samples), 5))
-    for ax, p_val in zip(axes, p_samples):
+    snr_samples = [-2, 2, 4, 6]
+    fig, axes = plt.subplots(1, len(snr_samples), figsize=(4 * len(snr_samples), 5))
+    for ax, snr_db in zip(axes, snr_samples):
+        p_val = snr_db_to_ber(snr_db)
         pd_val = p_detected(spectrum, n, p_val)
         probs = retx_distribution(pd_val, M)
         ks = list(range(1, M + 2))
         ax.bar(ks, probs, color="steelblue", edgecolor="black", width=0.6)
-        ax.set_title(f"p = {p_val:.0e}\n$P_d$={pd_val:.3f}")
+        ax.set_title(f"SNR = {snr_db} дБ\n$P_d$={pd_val:.3f}")
         ax.set_xlabel("Число передач N")
         ax.set_ylabel("P(N=k)")
         ax.set_xticks(ks[::max(1, M // 5)])
