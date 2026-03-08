@@ -1,7 +1,6 @@
 #include "awgn_channel.hpp"
 #include "bpsk.hpp"
-#include "hamming_decoder.hpp"
-#include "hamming_encoder.hpp"
+#include "fec/fec_factory.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -25,6 +24,7 @@ struct Options {
   double snr_end = 12.0;
   int snr_points = 13;
   int r = 0;
+  std::string codec = "hamming";
 };
 
 void PrintUsage(const char* argv0) {
@@ -32,7 +32,8 @@ void PrintUsage(const char* argv0) {
             << " [--bits <count>] [--seed <seed>]"
             << " [--snr <dB1,dB2,...>]"
             << " [--snr-start <dB> --snr-end <dB> --snr-points <n>]"
-            << " [--r <parity_bits>]\n";
+            << " [--r <parity_bits>]"
+            << " [--codec <hamming|conv>]\n";
 }
 
 bool ParseSnrList(const std::string& value, std::vector<double>* out) {
@@ -80,6 +81,8 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->use_range = true;
     } else if (arg == "--r" && i + 1 < argc) {
       options->r = std::stoi(argv[++i]);
+    } else if (arg == "--codec" && i + 1 < argc) {
+      options->codec = argv[++i];
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -117,6 +120,10 @@ int main(int argc, char** argv) {
     std::cerr << "r must be >= 2 for Hamming code.\n";
     return 1;
   }
+  if (options.codec != "hamming" && options.codec != "conv") {
+    std::cerr << "codec must be one of: hamming, conv.\n";
+    return 1;
+  }
 
   std::vector<double> snr_values = options.snr_list;
   if (options.use_range) {
@@ -133,11 +140,24 @@ int main(int argc, char** argv) {
   std::mt19937 rng(options.seed);
   std::uniform_int_distribution<int> bit_dist(0, 1);
 
+  harq::BpskModulator modulator;
+  harq::BpskDemodulator demodulator;
+  std::unique_ptr<harq::fec::IFecCodec> codec;
+
   int k = 0;
   int n = 0;
   if (options.r > 0) {
-    n = (1 << options.r) - 1;
-    k = n - options.r;
+    harq::fec::FecConfig config;
+    config.codec_type =
+        options.codec == "hamming"
+            ? harq::fec::CodecType::kHamming
+            : harq::fec::CodecType::kConvolutionalAff3ct;
+    config.hamming_r = options.r;
+    codec = harq::fec::CreateCodec(config);
+
+    k = codec->input_bits_per_frame();
+    n = codec->output_bits_per_frame();
+
     if (options.bits < static_cast<std::size_t>(k)) {
       std::cerr << "bits must be >= k for coded simulation.\n";
       return 1;
@@ -165,15 +185,6 @@ int main(int argc, char** argv) {
     std::cout << "snr_db,ber,bit_errors,total_bits\n";
   }
   std::cout << std::setprecision(8) << std::fixed;
-
-  harq::BpskModulator modulator;
-  harq::BpskDemodulator demodulator;
-  std::unique_ptr<harq::HammingEncoder> encoder;
-  std::unique_ptr<harq::HammingDecoder> decoder;
-  if (options.r > 0) {
-    encoder = std::make_unique<harq::HammingEncoder>(options.r);
-    decoder = std::make_unique<harq::HammingDecoder>(options.r);
-  }
 
   for (std::size_t idx = 0; idx < snr_values.size(); ++idx) {
     double snr_db = snr_values[idx];
@@ -216,7 +227,7 @@ int main(int argc, char** argv) {
       std::vector<uint8_t> block(
           data.begin() + static_cast<std::ptrdiff_t>(i),
           data.begin() + static_cast<std::ptrdiff_t>(i + k));
-      std::vector<uint8_t> encoded = encoder->Encode(block);
+      std::vector<uint8_t> encoded = codec->Encode(block);
       codeword.insert(codeword.end(), encoded.begin(), encoded.end());
     }
 
@@ -232,7 +243,7 @@ int main(int argc, char** argv) {
       std::vector<uint8_t> cw(
           coded_demod.begin() + static_cast<std::ptrdiff_t>(i),
           coded_demod.begin() + static_cast<std::ptrdiff_t>(i + n));
-      std::vector<uint8_t> decoded_block = decoder->Decode(cw);
+      std::vector<uint8_t> decoded_block = codec->DecodeHard(cw);
       decoded_data.insert(decoded_data.end(),
                           decoded_block.begin(),
                           decoded_block.end());
