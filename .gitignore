@@ -40,3 +40,5 @@ compile_commands.json
 *.csv
 
 build-aff3ct-on
+
+*__pycache__*
