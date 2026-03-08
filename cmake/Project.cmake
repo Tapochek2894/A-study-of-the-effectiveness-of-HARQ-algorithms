@@ -12,6 +12,23 @@ target_include_directories(harq PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/../include
 )
 
+set(HARQ_AFF3CT_ENABLED 0)
+if(ENABLE_AFF3CT)
+    find_path(AFF3CT_INCLUDE_DIR aff3ct.hpp)
+    find_library(AFF3CT_LIBRARY NAMES aff3ct)
+
+    if(AFF3CT_INCLUDE_DIR AND AFF3CT_LIBRARY)
+        target_include_directories(harq PUBLIC ${AFF3CT_INCLUDE_DIR})
+        target_link_libraries(harq PUBLIC ${AFF3CT_LIBRARY})
+        set(HARQ_AFF3CT_ENABLED 1)
+        message(STATUS "AFF3CT enabled: ${AFF3CT_LIBRARY}")
+    else()
+        message(WARNING "ENABLE_AFF3CT=ON but AFF3CT not found. Convolutional backend will be disabled.")
+    endif()
+endif()
+
+target_compile_definitions(harq PUBLIC HARQ_ENABLE_AFF3CT=${HARQ_AFF3CT_ENABLED})
+
 add_executable(bpsk_passband_cloud
     ${CMAKE_CURRENT_LIST_DIR}/../tools/bpsk_passband_cloud.cpp
 )
