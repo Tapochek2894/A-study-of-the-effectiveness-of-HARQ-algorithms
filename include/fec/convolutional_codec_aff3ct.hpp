@@ -22,6 +22,8 @@ class ConvolutionalCodecAff3ct final : public IFecCodec {
  private:
   int input_bits_per_frame_;
   int output_bits_per_frame_;
+  int rate_num_;
+  int rate_den_;
   ConvDecoderType decoder_type_;
 };
 

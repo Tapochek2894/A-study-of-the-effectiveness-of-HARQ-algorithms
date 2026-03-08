@@ -26,6 +26,8 @@ struct Options {
   int r = 0;
   std::string codec = "hamming";
   int conv_k = 1024;
+  int conv_rate_num = 1;
+  int conv_rate_den = 2;
   std::string conv_decoder = "viterbi";
 };
 
@@ -37,6 +39,7 @@ void PrintUsage(const char* argv0) {
             << " [--r <parity_bits>]"
             << " [--codec <hamming|conv>]"
             << " [--conv-k <bits>]"
+            << " [--conv-rate <num/den>]"
             << " [--conv-decoder <viterbi|bcjr>]\n";
 }
 
@@ -60,6 +63,27 @@ bool ParseSnrList(const std::string& value, std::vector<double>* out) {
   }
   *out = std::move(parsed);
   return true;
+}
+
+bool ParseRate(const std::string& value, int* num, int* den) {
+  const std::size_t slash = value.find('/');
+  if (slash == std::string::npos || slash == 0 || slash + 1 >= value.size()) {
+    return false;
+  }
+  const std::string lhs = value.substr(0, slash);
+  const std::string rhs = value.substr(slash + 1);
+  try {
+    int parsed_num = std::stoi(lhs);
+    int parsed_den = std::stoi(rhs);
+    if (parsed_num <= 0 || parsed_den <= 0 || parsed_num > parsed_den) {
+      return false;
+    }
+    *num = parsed_num;
+    *den = parsed_den;
+    return true;
+  } catch (...) {
+    return false;
+  }
 }
 
 bool ParseArgs(int argc, char** argv, Options* options) {
@@ -89,6 +113,10 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->codec = argv[++i];
     } else if (arg == "--conv-k" && i + 1 < argc) {
       options->conv_k = std::stoi(argv[++i]);
+    } else if (arg == "--conv-rate" && i + 1 < argc) {
+      if (!ParseRate(argv[++i], &options->conv_rate_num, &options->conv_rate_den)) {
+        return false;
+      }
     } else if (arg == "--conv-decoder" && i + 1 < argc) {
       options->conv_decoder = argv[++i];
     } else if (arg == "--help" || arg == "-h") {
@@ -144,6 +172,13 @@ int main(int argc, char** argv) {
     std::cerr << "conv-k must be positive.\n";
     return 1;
   }
+  if (options.codec == "conv" &&
+      (options.conv_rate_num <= 0 ||
+       options.conv_rate_den <= 0 ||
+       options.conv_rate_num > options.conv_rate_den)) {
+    std::cerr << "conv-rate must be in form num/den with 0 < num <= den.\n";
+    return 1;
+  }
   if (options.codec == "conv" && !harq::fec::IsConvolutionalAff3ctAvailable()) {
     std::cerr
         << "Convolutional AFF3CT backend is unavailable in this build. "
@@ -181,6 +216,8 @@ int main(int argc, char** argv) {
               : harq::fec::CodecType::kConvolutionalAff3ct;
       config.hamming_r = options.r;
       config.conv_input_bits_per_frame = options.conv_k;
+      config.conv_rate_num = options.conv_rate_num;
+      config.conv_rate_den = options.conv_rate_den;
       config.conv_decoder = options.conv_decoder == "bcjr"
                                 ? harq::fec::ConvDecoderType::kBcjr
                                 : harq::fec::ConvDecoderType::kViterbi;

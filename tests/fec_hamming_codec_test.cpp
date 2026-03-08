@@ -78,10 +78,33 @@ TEST(FecFactoryTest, ConvolutionalCodecReportsConfiguredFrameSizes) {
   EXPECT_EQ(codec->output_bits_per_frame(), 512);
 }
 
+TEST(FecFactoryTest, ConvolutionalCodecRespectsConfiguredRate) {
+  harq::fec::FecConfig config;
+  config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
+  config.conv_input_bits_per_frame = 256;
+  config.conv_rate_num = 2;
+  config.conv_rate_den = 3;
+
+  auto codec = harq::fec::CreateCodec(config);
+
+  EXPECT_EQ(codec->input_bits_per_frame(), 256);
+  EXPECT_EQ(codec->output_bits_per_frame(), 384);
+}
+
 TEST(FecFactoryTest, ConvolutionalCodecRejectsInvalidFrameSize) {
   harq::fec::FecConfig config;
   config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
   config.conv_input_bits_per_frame = 0;
+
+  EXPECT_THROW(harq::fec::CreateCodec(config), std::invalid_argument);
+}
+
+TEST(FecFactoryTest, ConvolutionalCodecRejectsInvalidRate) {
+  harq::fec::FecConfig config;
+  config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
+  config.conv_input_bits_per_frame = 256;
+  config.conv_rate_num = 3;
+  config.conv_rate_den = 2;
 
   EXPECT_THROW(harq::fec::CreateCodec(config), std::invalid_argument);
 }
