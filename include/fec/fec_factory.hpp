@@ -8,5 +8,6 @@
 namespace harq::fec {
 
 std::unique_ptr<IFecCodec> CreateCodec(const FecConfig& config);
+bool IsConvolutionalAff3ctAvailable();
 
 }  // namespace harq::fec

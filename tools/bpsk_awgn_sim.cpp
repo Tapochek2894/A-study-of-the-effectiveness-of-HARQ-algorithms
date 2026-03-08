@@ -144,6 +144,12 @@ int main(int argc, char** argv) {
     std::cerr << "conv-k must be positive.\n";
     return 1;
   }
+  if (options.codec == "conv" && !harq::fec::IsConvolutionalAff3ctAvailable()) {
+    std::cerr
+        << "Convolutional AFF3CT backend is unavailable in this build. "
+        << "Rebuild with -DENABLE_AFF3CT=ON and installed AFF3CT.\n";
+    return 2;
+  }
 
   std::vector<double> snr_values = options.snr_list;
   if (options.use_range) {
@@ -210,10 +216,11 @@ int main(int argc, char** argv) {
   }
   std::cout << std::setprecision(8) << std::fixed;
 
-  for (std::size_t idx = 0; idx < snr_values.size(); ++idx) {
-    double snr_db = snr_values[idx];
-    if (!std::isfinite(snr_db)) {
-      std::cerr << "Invalid SNR value: " << snr_db << "\n";
+  try {
+    for (std::size_t idx = 0; idx < snr_values.size(); ++idx) {
+      double snr_db = snr_values[idx];
+      if (!std::isfinite(snr_db)) {
+        std::cerr << "Invalid SNR value: " << snr_db << "\n";
       return 1;
     }
     harq::AwgnChannel channel(snr_db,
@@ -282,9 +289,13 @@ int main(int argc, char** argv) {
 
     double ber_coded = static_cast<double>(coded_errors) /
         static_cast<double>(info_bits);
-    std::cout << snr_db << "," << ber << "," << ber_coded << ","
-              << bit_errors << "," << coded_errors << "," << info_bits << ","
-              << info_bits << "\n";
+      std::cout << snr_db << "," << ber << "," << ber_coded << ","
+                << bit_errors << "," << coded_errors << "," << info_bits << ","
+                << info_bits << "\n";
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "Simulation failed: " << e.what() << "\n";
+    return 2;
   }
 
   return 0;

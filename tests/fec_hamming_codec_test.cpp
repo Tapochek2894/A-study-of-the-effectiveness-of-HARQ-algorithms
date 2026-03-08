@@ -54,6 +54,12 @@ TEST(FecFactoryTest, ConvolutionalCodecUnavailableWithoutAff3ct) {
   harq::fec::FecConfig config;
   config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
 
+#if HARQ_ENABLE_AFF3CT
+  EXPECT_TRUE(harq::fec::IsConvolutionalAff3ctAvailable());
+#else
+  EXPECT_FALSE(harq::fec::IsConvolutionalAff3ctAvailable());
+#endif
+
   auto codec = harq::fec::CreateCodec(config);
 
   std::vector<uint8_t> info(
