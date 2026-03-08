@@ -50,21 +50,17 @@ TEST(FecHammingCodecTest, EncodeDecodeSoftRoundTrip) {
   EXPECT_EQ(decoded, info);
 }
 
-TEST(FecFactoryTest, ConvolutionalCodecUnavailableWithoutAff3ct) {
+TEST(FecFactoryTest, ConvolutionalCodecIsAvailable) {
   harq::fec::FecConfig config;
   config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
 
-#if HARQ_ENABLE_AFF3CT
   EXPECT_TRUE(harq::fec::IsConvolutionalAff3ctAvailable());
-#else
-  EXPECT_FALSE(harq::fec::IsConvolutionalAff3ctAvailable());
-#endif
 
   auto codec = harq::fec::CreateCodec(config);
 
   std::vector<uint8_t> info(
       static_cast<std::size_t>(codec->input_bits_per_frame()), 0);
-  EXPECT_THROW(codec->Encode(info), std::invalid_argument);
+  EXPECT_NO_THROW(codec->Encode(info));
 }
 
 TEST(FecFactoryTest, ConvolutionalCodecReportsConfiguredFrameSizes) {
@@ -107,4 +103,32 @@ TEST(FecFactoryTest, ConvolutionalCodecRejectsInvalidRate) {
   config.conv_rate_den = 2;
 
   EXPECT_THROW(harq::fec::CreateCodec(config), std::invalid_argument);
+}
+
+TEST(FecFactoryTest, ConvolutionalCodecRoundTripHardAndSoft) {
+  harq::fec::FecConfig config;
+  config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
+  config.conv_input_bits_per_frame = 64;
+  config.conv_rate_num = 1;
+  config.conv_rate_den = 2;
+  config.conv_decoder = harq::fec::ConvDecoderType::kViterbi;
+
+  auto codec = harq::fec::CreateCodec(config);
+
+  std::vector<uint8_t> info(static_cast<std::size_t>(codec->input_bits_per_frame()));
+  for (std::size_t i = 0; i < info.size(); ++i) {
+    info[i] = static_cast<uint8_t>(i % 2);
+  }
+
+  const std::vector<uint8_t> codeword = codec->Encode(info);
+  const std::vector<uint8_t> decoded_hard = codec->DecodeHard(codeword);
+  EXPECT_EQ(decoded_hard, info);
+
+  std::vector<double> llr;
+  llr.reserve(codeword.size());
+  for (uint8_t b : codeword) {
+    llr.push_back(b ? 3.0 : -3.0);
+  }
+  const std::vector<uint8_t> decoded_soft = codec->DecodeSoft(llr);
+  EXPECT_EQ(decoded_soft, info);
 }

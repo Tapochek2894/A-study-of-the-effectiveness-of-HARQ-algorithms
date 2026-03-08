@@ -19,7 +19,7 @@ cmake --build build --target qpsk_awgn_sim
 # coded hamming
 ./build/qpsk_awgn_sim --bits 200000 --codec hamming --r 3 --snr 0,2,4,6
 
-# coded conv (требует AFF3CT)
+# coded conv
 ./build/qpsk_awgn_sim --bits 200000 --codec conv --conv-k 1024 --conv-rate 1/2 --conv-decoder viterbi --snr 0,2,4,6
 ```
 
@@ -42,4 +42,4 @@ cmake --build build --target qpsk_awgn_sim
 
 ## Ограничения
 
-- В текущей сборке без AFF3CT режим `--codec conv` завершится с сообщением о недоступном backend и кодом `2`.
+- `--conv-decoder bcjr` сейчас использует fallback на Viterbi в текущем встроенном backend.

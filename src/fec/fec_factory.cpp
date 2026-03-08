@@ -8,11 +8,7 @@
 namespace harq::fec {
 
 bool IsConvolutionalAff3ctAvailable() {
-#if HARQ_ENABLE_AFF3CT
   return true;
-#else
-  return false;
-#endif
 }
 
 std::unique_ptr<IFecCodec> CreateCodec(const FecConfig& config) {
