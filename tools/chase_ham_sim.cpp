@@ -2,8 +2,8 @@
 #include "bpsk.hpp"
 #include "bpsk_passband.hpp"
 #include "chase_algorithm.hpp"
+#include "fec/fec_factory.hpp"
 #include "hamming_decoder.hpp"
-#include "hamming_encoder.hpp"
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -27,12 +27,14 @@ struct Options {
   int snr_points = 11;
   int r = 3;
   bool extended = false;
+  std::string codec = "hamming";
 };
 
 void PrintUsage(const char *argv0) {
   std::cout << "Usage: " << argv0 << " [--bits <count>] [--seed <seed>]"
             << " [--snr <dB1,dB2,...>]"
             << " [--snr-start <dB> --snr-end <dB> --snr-points <n>]"
+            << " [--codec <hamming>]"
             << " [--r <parity_bits>]\n"
             << " [--extended]\n";
 }
@@ -82,6 +84,8 @@ bool ParseArgs(int argc, char **argv, Options *options) {
       options->use_range = true;
     } else if (arg == "--r" && i + 1 < argc) {
       options->r = std::stoi(argv[++i]);
+    } else if (arg == "--codec" && i + 1 < argc) {
+      options->codec = argv[++i];
     } else if (arg == "--extended") {
       options->extended = true;
     } else if (arg == "--help" || arg == "-h") {
@@ -117,6 +121,10 @@ int main(int argc, char **argv) {
     }
   }
 
+  if (options.codec != "hamming") {
+    std::cerr << "chase_ham_sim currently supports only --codec hamming.\n";
+    return 1;
+  }
   if (options.r != 0 && options.r < 2) {
     std::cerr << "r must be >= 2 for Hamming code.\n";
     return 1;
@@ -146,13 +154,23 @@ int main(int argc, char **argv) {
 
   int k = 0;
   int n = 0;
+  std::unique_ptr<harq::fec::IFecCodec> codec;
   if (options.r > 0) {
+    harq::fec::FecConfig fec_config;
+    fec_config.codec_type = harq::fec::CodecType::kHamming;
+    fec_config.hamming_r = options.r;
+    fec_config.hamming_extended = options.extended;
+    codec = harq::fec::CreateCodec(fec_config);
+
     int base_n = (1 << options.r) - 1;   // 2^r - 1
     int base_k = base_n - options.r;     // 2^r - 1 - r
-    n = base_n;                      // расширенный: 2^r
-    k = base_k;   
-    if (options.extended) {
-      n = base_n + 1; 
+    n = codec->output_bits_per_frame();
+    k = codec->input_bits_per_frame();
+    // Defensive check against formula drift in hamming backend.
+    const int expected_n = options.extended ? (base_n + 1) : base_n;
+    if (n != expected_n || k != base_k) {
+      std::cerr << "Unexpected hamming frame dimensions from codec backend.\n";
+      return 1;
     }
     if (options.bits < static_cast<std::size_t>(k)) {
       std::cerr << "bits must be >= k for coded simulation.\n";
@@ -184,12 +202,6 @@ int main(int argc, char **argv) {
 
   harq::BpskModulator modulator;
   harq::BpskDemodulator demodulator;
-  std::unique_ptr<harq::HammingEncoder> encoder;
-  std::unique_ptr<harq::HammingDecoder> decoder;
-  if (options.r > 0) {
-    encoder = std::make_unique<harq::HammingEncoder>(options.r);
-    decoder = std::make_unique<harq::HammingDecoder>(options.r);
-  }
 
   for (std::size_t idx = 0; idx < snr_values.size(); ++idx) {
     double snr_db = snr_values[idx];
@@ -232,12 +244,7 @@ int main(int argc, char **argv) {
       std::vector<uint8_t> block(data.begin() + static_cast<std::ptrdiff_t>(i),
                                  data.begin() +
                                      static_cast<std::ptrdiff_t>(i + k));
-      std::vector<uint8_t> encoded;
-      if (options.extended) {
-        encoded = encoder->EncodeExtended(block);
-      } else {
-        encoded = encoder->Encode(block);
-      }          
+      std::vector<uint8_t> encoded = codec->Encode(block);
       codeword.insert(codeword.end(), encoded.begin(), encoded.end());
     }
 
@@ -268,7 +275,7 @@ int main(int argc, char **argv) {
       std::vector<uint8_t> cw_hard(
           coded_demod_hard.begin() + static_cast<std::ptrdiff_t>(i),
           coded_demod_hard.begin() + static_cast<std::ptrdiff_t>(i + n));
-      std::vector<uint8_t> decoded_block = decoder->Decode(cw_hard);
+      std::vector<uint8_t> decoded_block = codec->DecodeHard(cw_hard);
       decoded_data.insert(decoded_data.end(),
                           decoded_block.begin(),
                           decoded_block.end());
