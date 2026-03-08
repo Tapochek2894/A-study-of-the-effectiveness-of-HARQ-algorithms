@@ -168,127 +168,127 @@ int main(int argc, char** argv) {
 
   harq::BpskModulator modulator;
   harq::BpskDemodulator demodulator;
-  std::unique_ptr<harq::fec::IFecCodec> codec;
-
-  int k = 0;
-  int n = 0;
-  if (coded_mode_requested) {
-    harq::fec::FecConfig config;
-    config.codec_type =
-        options.codec == "hamming"
-            ? harq::fec::CodecType::kHamming
-            : harq::fec::CodecType::kConvolutionalAff3ct;
-    config.hamming_r = options.r;
-    config.conv_input_bits_per_frame = options.conv_k;
-    config.conv_decoder = options.conv_decoder == "bcjr"
-                              ? harq::fec::ConvDecoderType::kBcjr
-                              : harq::fec::ConvDecoderType::kViterbi;
-    codec = harq::fec::CreateCodec(config);
-
-    k = codec->input_bits_per_frame();
-    n = codec->output_bits_per_frame();
-
-    if (options.bits < static_cast<std::size_t>(k)) {
-      std::cerr << "bits must be >= k for coded simulation.\n";
-      return 1;
-    }
-  }
-
-  std::size_t info_bits = options.bits;
-  if (coded_mode_requested) {
-    info_bits = (options.bits / static_cast<std::size_t>(k)) *
-        static_cast<std::size_t>(k);
-    if (info_bits == 0) {
-      std::cerr << "bits must be >= k for coded simulation.\n";
-      return 1;
-    }
-    if (info_bits != options.bits) {
-      std::cerr << "Warning: trimming bits to " << info_bits
-                << " to fit k=" << k << ".\n";
-    }
-  }
-
-  if (coded_mode_requested) {
-    std::cout << "snr_db,ber_uncoded,ber_coded,bit_errors_uncoded,"
-              << "bit_errors_coded,total_bits_uncoded,total_bits_coded\n";
-  } else {
-    std::cout << "snr_db,ber,bit_errors,total_bits\n";
-  }
-  std::cout << std::setprecision(8) << std::fixed;
 
   try {
+    std::unique_ptr<harq::fec::IFecCodec> codec;
+    int k = 0;
+    int n = 0;
+    if (coded_mode_requested) {
+      harq::fec::FecConfig config;
+      config.codec_type =
+          options.codec == "hamming"
+              ? harq::fec::CodecType::kHamming
+              : harq::fec::CodecType::kConvolutionalAff3ct;
+      config.hamming_r = options.r;
+      config.conv_input_bits_per_frame = options.conv_k;
+      config.conv_decoder = options.conv_decoder == "bcjr"
+                                ? harq::fec::ConvDecoderType::kBcjr
+                                : harq::fec::ConvDecoderType::kViterbi;
+      codec = harq::fec::CreateCodec(config);
+
+      k = codec->input_bits_per_frame();
+      n = codec->output_bits_per_frame();
+
+      if (options.bits < static_cast<std::size_t>(k)) {
+        std::cerr << "bits must be >= input_bits_per_frame for coded simulation.\n";
+        return 1;
+      }
+    }
+
+    std::size_t info_bits = options.bits;
+    if (coded_mode_requested) {
+      info_bits = (options.bits / static_cast<std::size_t>(k)) *
+          static_cast<std::size_t>(k);
+      if (info_bits == 0) {
+        std::cerr << "bits must be >= input_bits_per_frame for coded simulation.\n";
+        return 1;
+      }
+      if (info_bits != options.bits) {
+        std::cerr << "Warning: trimming bits to " << info_bits
+                  << " to fit input_bits_per_frame=" << k << ".\n";
+      }
+    }
+
+    if (coded_mode_requested) {
+      std::cout << "snr_db,ber_uncoded,ber_coded,bit_errors_uncoded,"
+                << "bit_errors_coded,total_bits_uncoded,total_bits_coded\n";
+    } else {
+      std::cout << "snr_db,ber,bit_errors,total_bits\n";
+    }
+    std::cout << std::setprecision(8) << std::fixed;
+
     for (std::size_t idx = 0; idx < snr_values.size(); ++idx) {
       double snr_db = snr_values[idx];
       if (!std::isfinite(snr_db)) {
         std::cerr << "Invalid SNR value: " << snr_db << "\n";
-      return 1;
-    }
-    harq::AwgnChannel channel(snr_db,
-                              static_cast<uint32_t>(options.seed + idx));
-
-    std::vector<uint8_t> data(info_bits, 0);
-    for (std::size_t i = 0; i < info_bits; ++i) {
-      data[i] = static_cast<uint8_t>(bit_dist(rng));
-    }
-
-    std::vector<double> symbols = modulator.Modulate(data);
-    std::vector<double> received = channel.AddNoise(symbols);
-    std::vector<uint8_t> decoded = demodulator.Demodulate(received);
-
-    std::size_t bit_errors = 0;
-    for (std::size_t i = 0; i < info_bits; ++i) {
-      if (decoded[i] != data[i]) {
-        ++bit_errors;
+        return 1;
       }
-    }
+      harq::AwgnChannel channel(snr_db,
+                                static_cast<uint32_t>(options.seed + idx));
 
-    double ber = static_cast<double>(bit_errors) /
-        static_cast<double>(info_bits);
-
-    if (!coded_mode_requested) {
-      std::cout << snr_db << "," << ber << "," << bit_errors << ","
-                << info_bits << "\n";
-      continue;
-    }
-
-    std::vector<uint8_t> codeword;
-    codeword.reserve((info_bits / static_cast<std::size_t>(k)) *
-        static_cast<std::size_t>(n));
-    for (std::size_t i = 0; i < info_bits; i += static_cast<std::size_t>(k)) {
-      std::vector<uint8_t> block(
-          data.begin() + static_cast<std::ptrdiff_t>(i),
-          data.begin() + static_cast<std::ptrdiff_t>(i + k));
-      std::vector<uint8_t> encoded = codec->Encode(block);
-      codeword.insert(codeword.end(), encoded.begin(), encoded.end());
-    }
-
-    std::vector<double> coded_symbols = modulator.Modulate(codeword);
-    std::vector<double> coded_received = channel.AddNoise(coded_symbols);
-    std::vector<uint8_t> coded_demod =
-        demodulator.Demodulate(coded_received);
-
-    std::vector<uint8_t> decoded_data;
-    decoded_data.reserve(info_bits);
-    for (std::size_t i = 0; i < coded_demod.size();
-         i += static_cast<std::size_t>(n)) {
-      std::vector<uint8_t> cw(
-          coded_demod.begin() + static_cast<std::ptrdiff_t>(i),
-          coded_demod.begin() + static_cast<std::ptrdiff_t>(i + n));
-      std::vector<uint8_t> decoded_block = codec->DecodeHard(cw);
-      decoded_data.insert(decoded_data.end(),
-                          decoded_block.begin(),
-                          decoded_block.end());
-    }
-
-    std::size_t coded_errors = 0;
-    for (std::size_t i = 0; i < info_bits; ++i) {
-      if (decoded_data[i] != data[i]) {
-        ++coded_errors;
+      std::vector<uint8_t> data(info_bits, 0);
+      for (std::size_t i = 0; i < info_bits; ++i) {
+        data[i] = static_cast<uint8_t>(bit_dist(rng));
       }
-    }
 
-    double ber_coded = static_cast<double>(coded_errors) /
-        static_cast<double>(info_bits);
+      std::vector<double> symbols = modulator.Modulate(data);
+      std::vector<double> received = channel.AddNoise(symbols);
+      std::vector<uint8_t> decoded = demodulator.Demodulate(received);
+
+      std::size_t bit_errors = 0;
+      for (std::size_t i = 0; i < info_bits; ++i) {
+        if (decoded[i] != data[i]) {
+          ++bit_errors;
+        }
+      }
+
+      double ber = static_cast<double>(bit_errors) /
+          static_cast<double>(info_bits);
+
+      if (!coded_mode_requested) {
+        std::cout << snr_db << "," << ber << "," << bit_errors << ","
+                  << info_bits << "\n";
+        continue;
+      }
+
+      std::vector<uint8_t> codeword;
+      codeword.reserve((info_bits / static_cast<std::size_t>(k)) *
+          static_cast<std::size_t>(n));
+      for (std::size_t i = 0; i < info_bits; i += static_cast<std::size_t>(k)) {
+        std::vector<uint8_t> block(
+            data.begin() + static_cast<std::ptrdiff_t>(i),
+            data.begin() + static_cast<std::ptrdiff_t>(i + k));
+        std::vector<uint8_t> encoded = codec->Encode(block);
+        codeword.insert(codeword.end(), encoded.begin(), encoded.end());
+      }
+
+      std::vector<double> coded_symbols = modulator.Modulate(codeword);
+      std::vector<double> coded_received = channel.AddNoise(coded_symbols);
+      std::vector<uint8_t> coded_demod =
+          demodulator.Demodulate(coded_received);
+
+      std::vector<uint8_t> decoded_data;
+      decoded_data.reserve(info_bits);
+      for (std::size_t i = 0; i < coded_demod.size();
+           i += static_cast<std::size_t>(n)) {
+        std::vector<uint8_t> cw(
+            coded_demod.begin() + static_cast<std::ptrdiff_t>(i),
+            coded_demod.begin() + static_cast<std::ptrdiff_t>(i + n));
+        std::vector<uint8_t> decoded_block = codec->DecodeHard(cw);
+        decoded_data.insert(decoded_data.end(),
+                            decoded_block.begin(),
+                            decoded_block.end());
+      }
+
+      std::size_t coded_errors = 0;
+      for (std::size_t i = 0; i < info_bits; ++i) {
+        if (decoded_data[i] != data[i]) {
+          ++coded_errors;
+        }
+      }
+
+      double ber_coded = static_cast<double>(coded_errors) /
+          static_cast<double>(info_bits);
       std::cout << snr_db << "," << ber << "," << ber_coded << ","
                 << bit_errors << "," << coded_errors << "," << info_bits << ","
                 << info_bits << "\n";
