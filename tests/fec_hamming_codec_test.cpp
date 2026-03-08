@@ -60,3 +60,22 @@ TEST(FecFactoryTest, ConvolutionalCodecUnavailableWithoutAff3ct) {
       static_cast<std::size_t>(codec->input_bits_per_frame()), 0);
   EXPECT_THROW(codec->Encode(info), std::invalid_argument);
 }
+
+TEST(FecFactoryTest, ConvolutionalCodecReportsConfiguredFrameSizes) {
+  harq::fec::FecConfig config;
+  config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
+  config.conv_input_bits_per_frame = 256;
+
+  auto codec = harq::fec::CreateCodec(config);
+
+  EXPECT_EQ(codec->input_bits_per_frame(), 256);
+  EXPECT_EQ(codec->output_bits_per_frame(), 512);
+}
+
+TEST(FecFactoryTest, ConvolutionalCodecRejectsInvalidFrameSize) {
+  harq::fec::FecConfig config;
+  config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
+  config.conv_input_bits_per_frame = 0;
+
+  EXPECT_THROW(harq::fec::CreateCodec(config), std::invalid_argument);
+}
