@@ -38,3 +38,5 @@ compile_commands.json
 .ninja_deps
 .ninja_log
 *.csv
+
+build-aff3ct-on
