@@ -25,6 +25,8 @@ struct Options {
   int snr_points = 13;
   int r = 0;
   std::string codec = "hamming";
+  int conv_k = 1024;
+  std::string conv_decoder = "viterbi";
 };
 
 void PrintUsage(const char* argv0) {
@@ -33,7 +35,9 @@ void PrintUsage(const char* argv0) {
             << " [--snr <dB1,dB2,...>]"
             << " [--snr-start <dB> --snr-end <dB> --snr-points <n>]"
             << " [--r <parity_bits>]"
-            << " [--codec <hamming|conv>]\n";
+            << " [--codec <hamming|conv>]"
+            << " [--conv-k <bits>]"
+            << " [--conv-decoder <viterbi|bcjr>]\n";
 }
 
 bool ParseSnrList(const std::string& value, std::vector<double>* out) {
@@ -83,6 +87,10 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->r = std::stoi(argv[++i]);
     } else if (arg == "--codec" && i + 1 < argc) {
       options->codec = argv[++i];
+    } else if (arg == "--conv-k" && i + 1 < argc) {
+      options->conv_k = std::stoi(argv[++i]);
+    } else if (arg == "--conv-decoder" && i + 1 < argc) {
+      options->conv_decoder = argv[++i];
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -116,12 +124,24 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (options.r != 0 && options.r < 2) {
+  const bool coded_mode_requested = (options.codec == "conv" || options.r > 0);
+
+  if (options.codec == "hamming" && options.r != 0 && options.r < 2) {
     std::cerr << "r must be >= 2 for Hamming code.\n";
     return 1;
   }
   if (options.codec != "hamming" && options.codec != "conv") {
     std::cerr << "codec must be one of: hamming, conv.\n";
+    return 1;
+  }
+  if (options.codec == "conv" &&
+      options.conv_decoder != "viterbi" &&
+      options.conv_decoder != "bcjr") {
+    std::cerr << "conv-decoder must be one of: viterbi, bcjr.\n";
+    return 1;
+  }
+  if (options.codec == "conv" && options.conv_k <= 0) {
+    std::cerr << "conv-k must be positive.\n";
     return 1;
   }
 
@@ -146,13 +166,17 @@ int main(int argc, char** argv) {
 
   int k = 0;
   int n = 0;
-  if (options.r > 0) {
+  if (coded_mode_requested) {
     harq::fec::FecConfig config;
     config.codec_type =
         options.codec == "hamming"
             ? harq::fec::CodecType::kHamming
             : harq::fec::CodecType::kConvolutionalAff3ct;
     config.hamming_r = options.r;
+    config.conv_input_bits_per_frame = options.conv_k;
+    config.conv_decoder = options.conv_decoder == "bcjr"
+                              ? harq::fec::ConvDecoderType::kBcjr
+                              : harq::fec::ConvDecoderType::kViterbi;
     codec = harq::fec::CreateCodec(config);
 
     k = codec->input_bits_per_frame();
@@ -165,7 +189,7 @@ int main(int argc, char** argv) {
   }
 
   std::size_t info_bits = options.bits;
-  if (options.r > 0) {
+  if (coded_mode_requested) {
     info_bits = (options.bits / static_cast<std::size_t>(k)) *
         static_cast<std::size_t>(k);
     if (info_bits == 0) {
@@ -178,7 +202,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (options.r > 0) {
+  if (coded_mode_requested) {
     std::cout << "snr_db,ber_uncoded,ber_coded,bit_errors_uncoded,"
               << "bit_errors_coded,total_bits_uncoded,total_bits_coded\n";
   } else {
@@ -214,7 +238,7 @@ int main(int argc, char** argv) {
     double ber = static_cast<double>(bit_errors) /
         static_cast<double>(info_bits);
 
-    if (options.r == 0) {
+    if (!coded_mode_requested) {
       std::cout << snr_db << "," << ber << "," << bit_errors << ","
                 << info_bits << "\n";
       continue;
