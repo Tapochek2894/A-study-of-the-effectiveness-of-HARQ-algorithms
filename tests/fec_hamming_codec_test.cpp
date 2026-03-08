@@ -50,9 +50,13 @@ TEST(FecHammingCodecTest, EncodeDecodeSoftRoundTrip) {
   EXPECT_EQ(decoded, info);
 }
 
-TEST(FecFactoryTest, ThrowsForUnavailableConvolutionalCodec) {
+TEST(FecFactoryTest, ConvolutionalCodecUnavailableWithoutAff3ct) {
   harq::fec::FecConfig config;
   config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
 
-  EXPECT_THROW(harq::fec::CreateCodec(config), std::invalid_argument);
+  auto codec = harq::fec::CreateCodec(config);
+
+  std::vector<uint8_t> info(
+      static_cast<std::size_t>(codec->input_bits_per_frame()), 0);
+  EXPECT_THROW(codec->Encode(info), std::invalid_argument);
 }
