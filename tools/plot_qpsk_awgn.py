@@ -172,8 +172,8 @@ def main():
                 label='BER uncoded (QPSK)', linewidth=1.5)
     
     if has_coded:
-        ax.plot(snr_vals, ber_coded, 'rs--', markersize=5, 
-                label='BER coded (Hamming)', linewidth=1.5, markevery=2)
+        ax.plot(snr_vals, ber_coded, 'rs--', markersize=5,
+                label='BER coded (FEC)', linewidth=1.5, markevery=2)
 
     if args.theory:
         snr_min, snr_max = min(snr_vals), max(snr_vals)
@@ -198,7 +198,7 @@ def main():
     title = args.title
     if title is None:
         if has_coded:
-            title = "QPSK BER: Uncoded vs. Hamming Coded"
+            title = "QPSK BER: Uncoded vs. Coded (FEC)"
         else:
             title = "QPSK Bit Error Rate in AWGN"
     ax.set_title(title, fontsize=13, pad=15)
