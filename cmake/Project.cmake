@@ -69,3 +69,9 @@ add_executable(qpsk_bpsk_sim
 )
 
 target_link_libraries(qpsk_bpsk_sim PRIVATE harq)
+
+add_executable(qpsk_awgn_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/qpsk_awgn_sim.cpp
+)
+
+target_link_libraries(qpsk_awgn_sim PRIVATE harq)
