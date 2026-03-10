@@ -11,12 +11,12 @@
 #include <vector>
 #include <iomanip>
 
-const int N = 5000;                    // Число пакетов на точку SNR
-const int r = 3;                       // Параметр кода Хэмминга: (2^r-1, 2^r-1-r)
+const int N = 10000;                    // Число пакетов на точку SNR
+const int r = 4;                       // Параметр кода Хэмминга: (2^r-1, 2^r-1-r)
 const int MaximumAttempts = 10;        // Максимум попыток HARQ
-const uint32_t seed = 54934232u;
+const uint32_t seed = 593u;
 const std::vector<double> snr_values = {
-    -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2
+    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2
 };
 
 

@@ -27,9 +27,9 @@ COLUMN_STYLE = {
     "chase1_combining": ("Chase-1 combining", "tab:blue",   "-",  "o"),
     "chase2_combining": ("Chase-2 combining", "tab:cyan",   "-",  "s"),
     "chase3_combining": ("Chase-3 combining", "tab:green",  "-",  "^"),
-    "chase1_no_comb":   ("Chase-1 без комб.", "tab:red",    "--", "o"),
-    "chase2_no_comb":   ("Chase-2 без комб.", "tab:orange", "--", "s"),
-    "chase3_no_comb":   ("Chase-3 без комб.", "tab:brown",  "--", "^"),
+    "chase1_no_comb":   ("Chase-1", "tab:red",    "--", "o"),
+    "chase2_no_comb":   ("Chase-2", "tab:orange", "--", "s"),
+    "chase3_no_comb":   ("Chase-3", "tab:brown",  "--", "^"),
 }
 
 
@@ -100,9 +100,9 @@ def main():
                 label=label, linewidth=2, markersize=5)
 
     ax.set_xlabel("SNR (dB)", fontsize=12)
-    ax.set_ylabel("Среднее число повторных передач", fontsize=12)
+    ax.set_ylabel("Average retrancmits number", fontsize=12)
 
-    title = args.title or "Сравнение стратегий HARQ — методы Чейза"
+    title = args.title or "ARQ vs HARQ strategies"
     ax.set_title(title, fontsize=14)
     ax.grid(True, linestyle="--", alpha=0.7)
     ax.legend(fontsize=10)

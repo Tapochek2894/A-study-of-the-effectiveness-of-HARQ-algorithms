@@ -9,12 +9,12 @@
 #include <vector>
 #include <iomanip>
 
-const int N = 5000;
-const int r = 3;
+const int N = 10000;
+const int r = 4;
 const int MaximumAttempts = 10;
-const uint32_t seed = 5489u;
+const uint32_t seed = 593u;
 const std::vector<double> snr_values = {
-    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5
 };
 
 // Возвращает среднее число повторных передач.
