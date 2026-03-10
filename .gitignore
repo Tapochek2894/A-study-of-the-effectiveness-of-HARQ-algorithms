@@ -12,6 +12,7 @@ Makefile
 *_include.cmake
 *_tests.cmake
 .cache
+cmake/
 
 # Compilers
 *.o
