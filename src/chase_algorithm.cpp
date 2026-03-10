@@ -1,6 +1,8 @@
 #include "chase_algorithm.hpp"
 #include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <limits>
 #include "hamming_encoder.hpp"
@@ -57,7 +59,7 @@ generate_probe_sequences_2(int n, int d,
     return result;
   }
 
-  auto min_indices = harq::get_n_smallest_indices(reliability, selection_positions);
+  auto min_indices = get_n_smallest_indices(reliability, selection_positions);
 
   int total_combinations = 1 << selection_positions;
 
@@ -92,7 +94,7 @@ generate_probe_sequences_3(int n, int d,
     for (std::size_t i = 0; i <= precarious_positions; i += 2) {
       std::vector<uint8_t> sequence(n, 0);
       if (i != 0) {
-        auto least_reliable_indices = harq::get_n_smallest_indices(reliability, i);
+        auto least_reliable_indices = get_n_smallest_indices(reliability, i);
         for (std::size_t i = 0; i < least_reliable_indices.size(); ++i) {
           sequence[least_reliable_indices[i]] = 1;
         }
@@ -105,7 +107,7 @@ generate_probe_sequences_3(int n, int d,
     for (std::size_t i = 1; i <= precarious_positions; i += 2) {
       std::vector<uint8_t> sequence(n, 0);
       if (i != 0) {
-        auto least_reliable_indices = harq::get_n_smallest_indices(reliability, i);
+        auto least_reliable_indices = get_n_smallest_indices(reliability, i);
         for (std::size_t i = 0; i < least_reliable_indices.size(); ++i) {
           sequence[least_reliable_indices[i]] = 1;
         }
@@ -197,162 +199,124 @@ int GetCodeDistance(std::size_t received_size) {
 
 double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
                            const std::vector<double>& soft_bits) {
-    double dist = 0.0;
-    for (std::size_t i = 0; i < codeword.size(); ++i) {
-        double symbol = codeword[i] ? 1.0 : -1.0;
-        double diff = symbol - soft_bits[i];
-        dist += diff * diff;
-    }
-    return dist;
+  double dist = 0.0;
+  for (std::size_t i = 0; i < codeword.size(); ++i) {
+    double symbol = codeword[i] ? 1.0 : -1.0;
+    double diff = symbol - soft_bits[i];
+    dist += diff * diff;
+  }
+  return dist;
 }
 
 std::vector<uint8_t> DecodeHammingCodesWithChase(
-    const std::vector<double>& ReceivedSoftBits,
-    harq::ProbeAlgorithm probe_algorithm,
-    harq::HammingDecoder decoder) {
+    const std::vector<double>& received_soft_bits,
+    ProbeAlgorithm probe_algorithm,
+    HammingDecoder decoder) {
+  if (received_soft_bits.empty()) {
+    throw std::invalid_argument("received_soft_bits must not be empty");
+  }
 
-    if (ReceivedSoftBits.empty()) {
-        throw std::invalid_argument("ReceivedSoftBits must not be empty");
+  const int r = decoder.r();
+  const int d = HAMMING_CODE_DISTANCE;
+  HammingEncoder encoder(r);
+
+  const int n = static_cast<int>(received_soft_bits.size());
+  std::vector<uint8_t> hard_bits(n);
+  for (int i = 0; i < n; ++i) {
+    hard_bits[i] = received_soft_bits[i] >= 0.0 ? 1 : 0;
+  }
+
+  std::vector<std::vector<uint8_t>> probe_seqs;
+  switch (probe_algorithm) {
+    case ProbeAlgorithm::First:
+      probe_seqs = generate_probe_sequences_1(n, d);
+      break;
+    case ProbeAlgorithm::Second:
+      probe_seqs = generate_probe_sequences_2(n, d, received_soft_bits);
+      break;
+    case ProbeAlgorithm::Third:
+      probe_seqs = generate_probe_sequences_3(n, d, received_soft_bits);
+      break;
+    default:
+      throw std::invalid_argument("Unknown probe algorithm");
+  }
+
+  std::vector<std::vector<uint8_t>> cand_info;
+  std::vector<std::vector<uint8_t>> cand_cw;
+  cand_info.reserve(probe_seqs.size());
+  cand_cw.reserve(probe_seqs.size());
+
+  for (const auto& probe : probe_seqs) {
+    auto perturbed = AddErrorVector(hard_bits, probe);
+    auto info = decoder.Decode(perturbed);
+    auto cw = encoder.Encode(info);
+    cand_info.push_back(std::move(info));
+    cand_cw.push_back(std::move(cw));
+  }
+
+  std::size_t best = 0;
+  double min_dist = std::numeric_limits<double>::max();
+  for (std::size_t i = 0; i < cand_cw.size(); ++i) {
+    double dist = ComputeSoftDistance(cand_cw[i], received_soft_bits);
+    if (dist < min_dist) {
+      min_dist = dist;
+      best = i;
     }
-    
-    const int r = decoder.r();
-    const int d = GetCodeDistance(ReceivedSoftBits.size());
-    harq::HammingEncoder encoder(r);
+  }
 
-    std::vector<uint8_t> hard_bits;
-    hard_bits.reserve(ReceivedSoftBits.size());
-    for (double val : ReceivedSoftBits) {
-        hard_bits.push_back(val >= 0.0 ? 1 : 0);
-    }
-
-    auto candidates = harq::CalculateCandidates(
-        hard_bits, r, d, ReceivedSoftBits, probe_algorithm
-    );
-
-    std::vector<std::vector<uint8_t>> valid_info_words;
-    std::vector<std::vector<uint8_t>> valid_codewords;
-
-    for (const auto& cw : candidates) {
-        auto [info_word, status] = decoder.DecodeWithStatus(cw);
-
-        bool is_valid = false;
-        std::vector<uint8_t> reconstructed_cw;
-
-        if (d == HAMMING_CODE_DISTANCE) {
-            reconstructed_cw = encoder.Encode(info_word);
-            is_valid = true;
-        } else if (d == EXTENDED_HAMMING_CODE_DISTANCE) {
-            if (status != harq::HammingDecoder::DecodeStatus::kDetectedDouble) {
-                reconstructed_cw = encoder.EncodeExtended(info_word);
-                is_valid = true;
-            }
-        }
-
-        if (is_valid) {
-            valid_info_words.push_back(std::move(info_word));
-            valid_codewords.push_back(std::move(reconstructed_cw));
-        }
-    }
-
-    if (valid_codewords.empty()) {
-        return decoder.Decode(candidates[0]);
-    }
-
-    std::size_t best_index = 0;
-    double min_distance = std::numeric_limits<double>::max();
-
-    for (std::size_t i = 0; i < valid_codewords.size(); ++i) {
-        double dist = ComputeSoftDistance(valid_codewords[i], ReceivedSoftBits);
-        if (dist < min_distance) {
-            min_distance = dist;
-            best_index = i;
-        }
-    }
-
-    return valid_info_words[best_index];
+  return cand_info[best];
 }
 
 std::vector<uint8_t> DecodeHammingML(
     const std::vector<double>& soft_bits,
-    const HammingDecoder& decoder)
-{
-    if (soft_bits.empty()) {
-        throw std::invalid_argument("soft_bits must not be empty");
+    const HammingDecoder& decoder) {
+  if (soft_bits.empty()) {
+    throw std::invalid_argument("soft_bits must not be empty");
+  }
+
+  const int r = decoder.r();
+  const int n = (1 << r) - 1;
+  const int k = n - r;
+
+  if (static_cast<int>(soft_bits.size()) != n) {
+    throw std::invalid_argument("soft_bits size does not match Hamming code length");
+  }
+
+  HammingEncoder encoder(r);
+  std::vector<uint8_t> best_info;
+  double min_distance = std::numeric_limits<double>::max();
+
+  const std::size_t total = static_cast<std::size_t>(1) << k;
+  for (std::size_t idx = 0; idx < total; ++idx) {
+    std::vector<uint8_t> info_word(k);
+    for (int i = 0; i < k; ++i) {
+      info_word[i] = static_cast<uint8_t>((idx >> i) & 1);
     }
-
-    int r = decoder.r();
-    int n_base = (1 << r) - 1;
-    int k = n_base - r;
-    bool extended = IsPowerOfTwo(soft_bits.size());
-    int expected_n = extended ? n_base + 1 : n_base;
-
-    if (static_cast<int>(soft_bits.size()) != expected_n) {
-        throw std::invalid_argument("soft_bits size does not match Hamming code length for given r");
+    auto codeword = encoder.Encode(info_word);
+    double dist = ComputeSoftDistance(codeword, soft_bits);
+    if (dist < min_distance) {
+      min_distance = dist;
+      best_info = info_word;
     }
+  }
 
-    if (k <= 0) {
-        throw std::invalid_argument("Invalid r value in decoder");
-    }
-
-    HammingEncoder encoder(r);
-
-    std::vector<uint8_t> best_info;
-    double min_distance = std::numeric_limits<double>::max();
-
-    std::size_t total_info_words = static_cast<std::size_t>(1) << k;
-
-    for (std::size_t idx = 0; idx < total_info_words; ++idx) {
-        std::vector<uint8_t> info_word(k);
-        for (int i = 0; i < k; ++i) {
-            info_word[i] = static_cast<uint8_t>((idx >> i) & 1);
-        }
-
-        std::vector<uint8_t> codeword;
-        if (extended) {
-            codeword = encoder.EncodeExtended(info_word);
-        } else {
-            codeword = encoder.Encode(info_word);
-        }
-
-        double dist = ComputeSoftDistance(codeword, soft_bits);
-
-        if (dist < min_distance) {
-            min_distance = dist;
-            best_info = info_word;
-        }
-    }
-
-    return best_info;
+  return best_info;
 }
 
-std::vector<std::vector<uint8_t>>generate_probe_sequences_ml(int n, int d, int r) {
-    int k = n - r;
-
-    bool extended = n % 2 == 0;
-    std::vector<std::vector<uint8_t>> values;
-    HammingEncoder encoder(r);
-
-    std::vector<uint8_t> best_info;
-    double min_distance = std::numeric_limits<double>::max();
-
-    std::size_t total_info_words = static_cast<std::size_t>(1) << k;
-
-    for (std::size_t idx = 0; idx < total_info_words; ++idx) {
-        std::vector<uint8_t> info_word(k);
-        for (int i = 0; i < k; ++i) {
-            info_word[i] = static_cast<uint8_t>((idx >> i) & 1);
-        }
-
-        std::vector<uint8_t> codeword;
-        if (extended) {
-            codeword = encoder.EncodeExtended(info_word);
-        } else {
-            codeword = encoder.Encode(info_word);
-        }
-        values.push_back(codeword);
+std::vector<std::vector<uint8_t>> generate_probe_sequences_ml(int n, int d, int r) {
+  HammingEncoder encoder(r);
+  const int k = n - r;
+  const std::size_t total = static_cast<std::size_t>(1) << k;
+  std::vector<std::vector<uint8_t>> values;
+  values.reserve(total);
+  for (std::size_t idx = 0; idx < total; ++idx) {
+    std::vector<uint8_t> info_word(k);
+    for (int i = 0; i < k; ++i) {
+      info_word[i] = static_cast<uint8_t>((idx >> i) & 1);
     }
-
-    return values;
+    values.push_back(encoder.Encode(info_word));
+  }
+  return values;
 }
 
 } // namespace harq

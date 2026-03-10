@@ -21,7 +21,7 @@ class HammingDecoder {
   int n() const;
   int k() const;
   int r() const;
-  
+
   // Возвращает исправленное кодовое слово (или исходное, если ошибок нет).
   std::vector<uint8_t> Correct(const std::vector<uint8_t>& codeword) const;
 
