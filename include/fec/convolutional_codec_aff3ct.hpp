@@ -3,6 +3,15 @@
 #include "fec/fec_config.hpp"
 #include "fec/ifec_codec.hpp"
 
+#include <memory>
+
+#if HARQ_ENABLE_AFF3CT
+namespace aff3ct::tools {
+template <typename B, typename Q>
+class Codec_RSC;
+}  // namespace aff3ct::tools
+#endif
+
 namespace harq::fec {
 
 class ConvolutionalCodecAff3ct final : public IFecCodec {
@@ -25,6 +34,10 @@ class ConvolutionalCodecAff3ct final : public IFecCodec {
   int rate_num_;
   int rate_den_;
   ConvDecoderType decoder_type_;
+
+#if HARQ_ENABLE_AFF3CT
+  mutable std::unique_ptr<aff3ct::tools::Codec_RSC<int, float>> codec_;
+#endif
 };
 
 }  // namespace harq::fec
