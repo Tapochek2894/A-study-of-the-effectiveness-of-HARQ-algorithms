@@ -6,6 +6,12 @@ cmake -S . -B build
 cmake --build build
 ```
 
+Сборка с AFF3CT (скачивание выполняется автоматически из CMake):
+```
+cmake -S . -B build -DENABLE_AFF3CT=ON
+cmake --build build
+```
+
 ### Тесты
 ```
 ctest --test-dir build
