@@ -109,6 +109,7 @@ add_executable(crc_ber_bler_sim
 )
 
 target_link_libraries(crc_ber_bler_sim PRIVATE harq)
+
 add_executable(chase_ham_sim
     ${CMAKE_CURRENT_LIST_DIR}/../tools/chase_ham_sim.cpp
 )
@@ -132,3 +133,8 @@ add_executable(qpsk_awgn_sim
 )
 
 target_link_libraries(qpsk_awgn_sim PRIVATE harq)
+add_executable(arq_chase_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/arq_chase_sim.cpp
+)
+
+target_link_libraries(arq_chase_sim PRIVATE harq)
