@@ -42,4 +42,4 @@ cmake --build build --target qpsk_awgn_sim
 
 ## Ограничения
 
-- `--conv-decoder bcjr` сейчас использует fallback на Viterbi в текущем встроенном backend.
+- Режим `--codec conv` требует сборки с `ENABLE_AFF3CT=ON` (AFF3CT скачивается CMake автоматически).
