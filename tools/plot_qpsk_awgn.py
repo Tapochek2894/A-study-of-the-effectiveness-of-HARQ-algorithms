@@ -142,17 +142,6 @@ def parse_args():
         action="store_true",
         help="Hide legend"
     )
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--coded",
-        action="store_true",
-        help="Plot coded BER only (when coded columns are present)"
-    )
-    mode.add_argument(
-        "--uncoded",
-        action="store_true",
-        help="Plot uncoded BER only"
-    )
     return parser.parse_args()
 
 
@@ -172,12 +161,6 @@ def main():
     has_coded = bool(ber_coded and len(ber_coded) == len(snr_vals))
     has_simple_ber = bool(ber_vals and len(ber_vals) == len(snr_vals))
 
-    if args.coded:
-        has_uncoded = False
-        has_simple_ber = False
-    if args.uncoded:
-        has_coded = False
-
     fig, ax = plt.subplots(figsize=(8, 5), dpi=100)
     
     if has_simple_ber:
@@ -189,8 +172,8 @@ def main():
                 label='BER uncoded (QPSK)', linewidth=1.5)
     
     if has_coded:
-        ax.plot(snr_vals, ber_coded, 'rs--', markersize=5,
-                label='BER coded (FEC)', linewidth=1.5, markevery=2)
+        ax.plot(snr_vals, ber_coded, 'rs--', markersize=5, 
+                label='BER coded (Hamming)', linewidth=1.5, markevery=2)
 
     if args.theory:
         snr_min, snr_max = min(snr_vals), max(snr_vals)
@@ -215,7 +198,7 @@ def main():
     title = args.title
     if title is None:
         if has_coded:
-            title = "QPSK BER: Uncoded vs. Coded (FEC)"
+            title = "QPSK BER: Uncoded vs. Hamming Coded"
         else:
             title = "QPSK Bit Error Rate in AWGN"
     ax.set_title(title, fontsize=13, pad=15)

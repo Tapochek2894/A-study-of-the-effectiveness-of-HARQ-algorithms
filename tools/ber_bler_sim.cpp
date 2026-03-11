@@ -1,11 +1,11 @@
-#include "fec/fec_factory.hpp"
+#include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
 
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
@@ -17,11 +17,6 @@ struct Options {
   int r = 3;
   std::size_t blocks = 10000;
   uint32_t seed = 5489u;
-  std::string codec = "hamming";
-  int conv_k = 1024;
-  int conv_rate_num = 1;
-  int conv_rate_den = 2;
-  std::string conv_decoder = "viterbi";
   std::vector<double> p_list = {1e-4, 5e-4, 1e-3, 5e-3, 1e-2};
   bool use_range = false;
   double p_start = 1e-4;
@@ -36,9 +31,10 @@ struct ErrorOutcome {
   bool block_error = false;
 };
 
-std::vector<ErrorOutcome> PrecomputeErrorOutcomes(const harq::fec::IFecCodec& codec) {
-  const int n = codec.output_bits_per_frame();
-  const int k = codec.input_bits_per_frame();
+std::vector<ErrorOutcome> PrecomputeErrorOutcomes(int r) {
+  harq::HammingDecoder decoder(r);
+  const int n = decoder.n();
+  const int k = decoder.k();
   if (n <= 0 || n > 30) {
     throw std::invalid_argument("Unsupported n for exhaustive enumeration.");
   }
@@ -54,7 +50,7 @@ std::vector<ErrorOutcome> PrecomputeErrorOutcomes(const harq::fec::IFecCodec& co
           static_cast<uint8_t>((mask >> bit) & 1u);
     }
 
-    std::vector<uint8_t> decoded = codec.DecodeHard(error_vec);
+    std::vector<uint8_t> decoded = decoder.Decode(error_vec);
     int info_errors = 0;
     for (uint8_t bit : decoded) {
       info_errors += (bit == 1) ? 1 : 0;
@@ -76,8 +72,7 @@ std::vector<ErrorOutcome> PrecomputeErrorOutcomes(const harq::fec::IFecCodec& co
 
 void PrintUsage(const char* argv0) {
   std::cout << "Usage: " << argv0
-            << " [--codec <hamming|conv>] [--r <parity_bits>] [--blocks <count>] [--seed <seed>]"
-            << " [--conv-k <bits>] [--conv-rate <num/den>] [--conv-decoder <viterbi|bcjr>]"
+            << " [--r <parity_bits>] [--blocks <count>] [--seed <seed>]"
             << " [--p <p1,p2,...>]"
             << " [--p-start <value> --p-end <value> --p-points <n> [--p-linear]]\n";
 }
@@ -104,46 +99,15 @@ bool ParsePList(const std::string& value, std::vector<double>* out) {
   return true;
 }
 
-bool ParseRate(const std::string& value, int* num, int* den) {
-  const std::size_t slash = value.find('/');
-  if (slash == std::string::npos || slash == 0 || slash + 1 >= value.size()) {
-    return false;
-  }
-  const std::string lhs = value.substr(0, slash);
-  const std::string rhs = value.substr(slash + 1);
-  try {
-    int parsed_num = std::stoi(lhs);
-    int parsed_den = std::stoi(rhs);
-    if (parsed_num <= 0 || parsed_den <= 0 || parsed_num > parsed_den) {
-      return false;
-    }
-    *num = parsed_num;
-    *den = parsed_den;
-    return true;
-  } catch (...) {
-    return false;
-  }
-}
-
 bool ParseArgs(int argc, char** argv, Options* options) {
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (arg == "--codec" && i + 1 < argc) {
-      options->codec = argv[++i];
-    } else if (arg == "--r" && i + 1 < argc) {
+    if (arg == "--r" && i + 1 < argc) {
       options->r = std::stoi(argv[++i]);
     } else if (arg == "--blocks" && i + 1 < argc) {
       options->blocks = static_cast<std::size_t>(std::stoull(argv[++i]));
     } else if (arg == "--seed" && i + 1 < argc) {
       options->seed = static_cast<uint32_t>(std::stoul(argv[++i]));
-    } else if (arg == "--conv-k" && i + 1 < argc) {
-      options->conv_k = std::stoi(argv[++i]);
-    } else if (arg == "--conv-rate" && i + 1 < argc) {
-      if (!ParseRate(argv[++i], &options->conv_rate_num, &options->conv_rate_den)) {
-        return false;
-      }
-    } else if (arg == "--conv-decoder" && i + 1 < argc) {
-      options->conv_decoder = argv[++i];
     } else if (arg == "--p" && i + 1 < argc) {
       if (!ParsePList(argv[++i], &options->p_list)) {
         return false;
@@ -183,34 +147,6 @@ int main(int argc, char** argv) {
     std::cerr << "Blocks must be positive.\n";
     return 1;
   }
-  if (options.codec != "hamming" && options.codec != "conv") {
-    std::cerr << "codec must be one of: hamming, conv.\n";
-    return 1;
-  }
-  if (options.codec == "hamming" && options.r < 2) {
-    std::cerr << "r must be >= 2 for Hamming code.\n";
-    return 1;
-  }
-  if (options.codec == "conv" &&
-      options.conv_decoder != "viterbi" &&
-      options.conv_decoder != "bcjr") {
-    std::cerr << "conv-decoder must be one of: viterbi, bcjr.\n";
-    return 1;
-  }
-  if (options.codec == "conv" &&
-      (options.conv_k <= 0 ||
-       options.conv_rate_num <= 0 ||
-       options.conv_rate_den <= 0 ||
-       options.conv_rate_num > options.conv_rate_den)) {
-    std::cerr << "Invalid conv settings.\n";
-    return 1;
-  }
-  if (options.codec == "conv" && !harq::fec::IsConvolutionalAff3ctAvailable()) {
-    std::cerr
-        << "Convolutional AFF3CT backend is unavailable in this build. "
-        << "Rebuild with -DENABLE_AFF3CT=ON and installed AFF3CT.\n";
-    return 2;
-  }
   if (options.use_range) {
     if (!(options.p_start > 0.0 && options.p_start < 1.0 &&
           options.p_end > 0.0 && options.p_end <= 1.0 &&
@@ -224,24 +160,12 @@ int main(int argc, char** argv) {
     }
   }
 
-  harq::fec::FecConfig config;
-  config.codec_type =
-      options.codec == "hamming"
-          ? harq::fec::CodecType::kHamming
-          : harq::fec::CodecType::kConvolutionalAff3ct;
-  config.hamming_r = options.r;
-  config.conv_input_bits_per_frame = options.conv_k;
-  config.conv_rate_num = options.conv_rate_num;
-  config.conv_rate_den = options.conv_rate_den;
-  config.conv_decoder = options.conv_decoder == "bcjr"
-                            ? harq::fec::ConvDecoderType::kBcjr
-                            : harq::fec::ConvDecoderType::kViterbi;
-
-  std::unique_ptr<harq::fec::IFecCodec> codec = harq::fec::CreateCodec(config);
-  const int k = codec->input_bits_per_frame();
-  const int n = codec->output_bits_per_frame();
+  harq::HammingEncoder encoder(options.r);
+  harq::HammingDecoder decoder(options.r);
+  const int k = encoder.k();
+  const int n = encoder.n();
   const std::vector<ErrorOutcome> error_outcomes =
-      PrecomputeErrorOutcomes(*codec);
+      PrecomputeErrorOutcomes(options.r);
 
   std::mt19937 rng(options.seed);
   std::uniform_int_distribution<int> bit_dist(0, 1);
@@ -300,14 +224,14 @@ int main(int argc, char** argv) {
             static_cast<uint8_t>(bit_dist(rng));
       }
 
-      std::vector<uint8_t> codeword = codec->Encode(data);
+      std::vector<uint8_t> codeword = encoder.Encode(data);
       for (uint8_t& bit : codeword) {
         if (uni(rng) < p) {
           bit ^= 1;
         }
       }
 
-      std::vector<uint8_t> decoded = codec->DecodeHard(codeword);
+      std::vector<uint8_t> decoded = decoder.Decode(codeword);
 
       bool block_error = false;
       for (int i = 0; i < k; ++i) {

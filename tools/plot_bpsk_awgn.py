@@ -74,17 +74,6 @@ def parse_args():
         action="store_true",
         help="Add theoretical BER curve: P_e = Q(sqrt(2*SNR))",
     )
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--coded",
-        action="store_true",
-        help="Plot coded BER only (when coded columns are present)",
-    )
-    mode.add_argument(
-        "--uncoded",
-        action="store_true",
-        help="Plot uncoded BER only",
-    )
     return parser.parse_args()
 
 
@@ -96,22 +85,12 @@ def main():
 
     snr_vals, ber_vals, ber_uncoded, ber_coded = load_csv(csv_path)
 
-    has_uncoded = bool(ber_uncoded and len(ber_uncoded) == len(snr_vals))
-    has_coded = bool(ber_coded and len(ber_coded) == len(snr_vals))
-    has_simple = bool(ber_vals and len(ber_vals) == len(snr_vals))
-
-    if args.coded:
-        has_uncoded = False
-        has_simple = False
-    if args.uncoded:
-        has_coded = False
-
     fig, ax = plt.subplots()
-    if has_simple:
+    if ber_vals:
         ax.plot(snr_vals, ber_vals, marker="o", label="BER (simulation)")
-    if has_uncoded:
+    if ber_uncoded:
         ax.plot(snr_vals, ber_uncoded, marker="o", label="BER uncoded")
-    if has_coded:
+    if ber_coded:
         ax.plot(snr_vals, ber_coded, marker="s", label="BER coded")
 
     if args.theory:

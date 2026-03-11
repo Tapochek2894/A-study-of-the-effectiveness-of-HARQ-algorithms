@@ -1,36 +1,32 @@
 #include "awgn_channel.hpp"
 #include "bpsk.hpp"
 #include "chase_combining.hpp"
-#include "fec/fec_factory.hpp"
 #include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
 #include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <vector>
 #include <iomanip>
 
-const int N = 5000;
-const int r = 3;
+const int N = 10000;
+const int r = 4;
 const int MaximumAttempts = 10;
-const uint32_t seed = 5489u;
+const uint32_t seed = 593u;
 const std::vector<double> snr_values = {
-    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5
 };
 
 // Возвращает среднее число повторных передач.
 // probe == nullopt → без комбинирования (каждая попытка независима)
 double simulate(double snr_db, harq::ProbeAlgorithm algo, bool combining) {
-    harq::fec::FecConfig fec_config;
-    fec_config.codec_type = harq::fec::CodecType::kHamming;
-    fec_config.hamming_r = r;
-    auto codec = harq::fec::CreateCodec(fec_config);
-
+    harq::HammingEncoder encoder(r);
     harq::HammingDecoder decoder(r);
 
-    int k = codec->input_bits_per_frame();
+    int k = (1 << r) - 1 - r;
     std::vector<uint8_t> info_word(k);
     for (int i = 0; i < k; ++i) info_word[i] = static_cast<uint8_t>(i % 2);
-    auto codeword = codec->Encode(info_word);
+    auto codeword = encoder.Encode(info_word);
     auto modulated = harq::BpskModulate(codeword);
 
     std::size_t total_retransmits = 0;

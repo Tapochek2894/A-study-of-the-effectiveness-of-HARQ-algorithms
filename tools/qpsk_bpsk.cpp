@@ -1,7 +1,8 @@
 #include "awgn_channel.hpp"
 #include "bpsk.hpp"
-#include "fec/fec_factory.hpp"
 #include "qpsk.hpp"
+#include "hamming_decoder.hpp"
+#include "hamming_encoder.hpp"
 
 #include <cmath>
 #include <complex>
@@ -26,11 +27,6 @@ struct Options {
   double snr_end = 12.0;
   int snr_points = 13;
   int r = 0;  // Hamming parity bits (0 = uncoded)
-  std::string codec = "hamming";
-  int conv_k = 1024;
-  int conv_rate_num = 1;
-  int conv_rate_den = 2;
-  std::string conv_decoder = "viterbi";
   
   // Flags for modulation schemes
   bool run_bpsk = true;
@@ -43,8 +39,6 @@ void PrintUsage(const char* argv0) {
             << " [--snr <dB1,dB2,...>]"
             << " [--snr-start <dB> --snr-end <dB> --snr-points <n>]"
             << " [--r <parity_bits>]"
-            << " [--codec <hamming|conv>] [--conv-k <bits>]"
-            << " [--conv-rate <num/den>] [--conv-decoder <viterbi|bcjr>]"
             << " [--bpsk] [--qpsk] [--both]\n"
             << "  --bpsk   Run BPSK only (default: both)\n"
             << "  --qpsk   Run QPSK only (default: both)\n"
@@ -65,27 +59,6 @@ bool ParseSnrList(const std::string& value, std::vector<double>* out) {
   if (parsed.empty()) return false;
   *out = std::move(parsed);
   return true;
-}
-
-bool ParseRate(const std::string& value, int* num, int* den) {
-  const std::size_t slash = value.find('/');
-  if (slash == std::string::npos || slash == 0 || slash + 1 >= value.size()) {
-    return false;
-  }
-  const std::string lhs = value.substr(0, slash);
-  const std::string rhs = value.substr(slash + 1);
-  try {
-    int parsed_num = std::stoi(lhs);
-    int parsed_den = std::stoi(rhs);
-    if (parsed_num <= 0 || parsed_den <= 0 || parsed_num > parsed_den) {
-      return false;
-    }
-    *num = parsed_num;
-    *den = parsed_den;
-    return true;
-  } catch (...) {
-    return false;
-  }
 }
 
 bool ParseArgs(int argc, char** argv, Options* options) {
@@ -112,16 +85,6 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       options->use_range = true;
     } else if (arg == "--r" && i + 1 < argc) {
       options->r = std::stoi(argv[++i]);
-    } else if (arg == "--codec" && i + 1 < argc) {
-      options->codec = argv[++i];
-    } else if (arg == "--conv-k" && i + 1 < argc) {
-      options->conv_k = std::stoi(argv[++i]);
-    } else if (arg == "--conv-rate" && i + 1 < argc) {
-      if (!ParseRate(argv[++i], &options->conv_rate_num, &options->conv_rate_den)) {
-        return false;
-      }
-    } else if (arg == "--conv-decoder" && i + 1 < argc) {
-      options->conv_decoder = argv[++i];
     } else if (arg == "--bpsk") {
       options->run_bpsk = true;
       options->run_qpsk = false;
@@ -180,35 +143,9 @@ int main(int argc, char** argv) {
     }
   }
   
-  const bool coded_mode_requested = (options.codec == "conv" || options.r > 0);
-
-  if (options.codec != "hamming" && options.codec != "conv") {
-    std::cerr << "codec must be one of: hamming, conv.\n";
-    return 1;
-  }
-  if (options.codec == "hamming" && options.r != 0 && options.r < 2) {
+  if (options.r != 0 && options.r < 2) {
     std::cerr << "r must be >= 2 for Hamming code.\n";
     return 1;
-  }
-  if (options.codec == "conv" &&
-      options.conv_decoder != "viterbi" &&
-      options.conv_decoder != "bcjr") {
-    std::cerr << "conv-decoder must be one of: viterbi, bcjr.\n";
-    return 1;
-  }
-  if (options.codec == "conv" &&
-      (options.conv_k <= 0 ||
-       options.conv_rate_num <= 0 ||
-       options.conv_rate_den <= 0 ||
-       options.conv_rate_num > options.conv_rate_den)) {
-    std::cerr << "Invalid conv settings.\n";
-    return 1;
-  }
-  if (options.codec == "conv" && !harq::fec::IsConvolutionalAff3ctAvailable()) {
-    std::cerr
-        << "Convolutional AFF3CT backend is unavailable in this build. "
-        << "Rebuild with -DENABLE_AFF3CT=ON and installed AFF3CT.\n";
-    return 2;
   }
 
   // Build SNR list
@@ -227,51 +164,36 @@ int main(int argc, char** argv) {
   std::mt19937 rng(options.seed);
   std::uniform_int_distribution<int> bit_dist(0, 1);
 
-  // FEC frame parameters
+  // Hamming code parameters
   int k = 0, n = 0;
-  std::unique_ptr<harq::fec::IFecCodec> codec;
-  if (coded_mode_requested) {
-    harq::fec::FecConfig config;
-    config.codec_type =
-        options.codec == "hamming"
-            ? harq::fec::CodecType::kHamming
-            : harq::fec::CodecType::kConvolutionalAff3ct;
-    config.hamming_r = options.r;
-    config.conv_input_bits_per_frame = options.conv_k;
-    config.conv_rate_num = options.conv_rate_num;
-    config.conv_rate_den = options.conv_rate_den;
-    config.conv_decoder = options.conv_decoder == "bcjr"
-                              ? harq::fec::ConvDecoderType::kBcjr
-                              : harq::fec::ConvDecoderType::kViterbi;
-    codec = harq::fec::CreateCodec(config);
-
-    k = codec->input_bits_per_frame();
-    n = codec->output_bits_per_frame();
+  if (options.r > 0) {
+    n = (1 << options.r) - 1;
+    k = n - options.r;
     if (options.bits < static_cast<std::size_t>(k)) {
-      std::cerr << "bits must be >= input_bits_per_frame for coded simulation.\n";
+      std::cerr << "bits must be >= k for coded simulation.\n";
       return 1;
     }
   }
 
   // Adjust info_bits to fit code blocks
   std::size_t info_bits = options.bits;
-  if (coded_mode_requested) {
+  if (options.r > 0) {
     info_bits = (options.bits / static_cast<std::size_t>(k)) * 
                 static_cast<std::size_t>(k);
     if (info_bits == 0) {
-      std::cerr << "bits must be >= input_bits_per_frame for coded simulation.\n";
+      std::cerr << "bits must be >= k for coded simulation.\n";
       return 1;
     }
     if (info_bits != options.bits) {
       std::cerr << "Warning: trimming bits to " << info_bits 
-                << " to fit input_bits_per_frame=" << k << ".\n";
+                << " to fit k=" << k << ".\n";
     }
   }
 
   // Print CSV header based on selected modulations
-    std::cout << "snr_db";
+  std::cout << "snr_db";
   if (options.run_bpsk) {
-    if (coded_mode_requested) {
+    if (options.r > 0) {
       std::cout << ",bpsk_ber_uncoded,bpsk_ber_coded"
                 << ",bpsk_errors_uncoded,bpsk_errors_coded";
     } else {
@@ -279,7 +201,7 @@ int main(int argc, char** argv) {
     }
   }
   if (options.run_qpsk) {
-    if (coded_mode_requested) {
+    if (options.r > 0) {
       std::cout << ",qpsk_ber_uncoded,qpsk_ber_coded"
                 << ",qpsk_errors_uncoded,qpsk_errors_coded";
     } else {
@@ -303,6 +225,14 @@ int main(int argc, char** argv) {
   if (options.run_qpsk) {
     qpsk_mod = std::make_unique<harq::QpskModulator>();
     qpsk_demod = std::make_unique<harq::QpskDemodulator>();
+  }
+
+  // Hamming codec
+  std::unique_ptr<harq::HammingEncoder> encoder;
+  std::unique_ptr<harq::HammingDecoder> decoder;
+  if (options.r > 0) {
+    encoder = std::make_unique<harq::HammingEncoder>(options.r);
+    decoder = std::make_unique<harq::HammingDecoder>(options.r);
   }
 
   // Main simulation loop
@@ -341,14 +271,14 @@ int main(int argc, char** argv) {
       bpsk_ber_uncoded = static_cast<double>(bpsk_errors_uncoded) / info_bits;
 
       // Coded BPSK (if enabled)
-      if (coded_mode_requested) {
+      if (options.r > 0) {
         std::vector<uint8_t> codeword;
         std::size_t num_blocks = info_bits / static_cast<std::size_t>(k);
         codeword.reserve(num_blocks * static_cast<std::size_t>(n));
         
         for (std::size_t i = 0; i < info_bits; i += static_cast<std::size_t>(k)) {
           std::vector<uint8_t> block(data.begin() + i, data.begin() + i + k);
-          std::vector<uint8_t> encoded = codec->Encode(block);
+          std::vector<uint8_t> encoded = encoder->Encode(block);
           codeword.insert(codeword.end(), encoded.begin(), encoded.end());
         }
         
@@ -361,7 +291,7 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i + n <= coded_demod.size(); i += n) {
           std::vector<uint8_t> cw(coded_demod.begin() + i, 
                                   coded_demod.begin() + i + n);
-          std::vector<uint8_t> decoded_block = codec->DecodeHard(cw);
+          std::vector<uint8_t> decoded_block = decoder->Decode(cw);
           decoded_data.insert(decoded_data.end(), 
                               decoded_block.begin(), 
                               decoded_block.end());
@@ -410,14 +340,14 @@ int main(int argc, char** argv) {
       qpsk_ber_uncoded = static_cast<double>(qpsk_errors_uncoded) / qpsk_info_bits;
 
       // Coded QPSK (if enabled)
-      if (coded_mode_requested) {
+      if (options.r > 0) {
         std::vector<uint8_t> codeword;
         std::size_t num_blocks = info_bits / static_cast<std::size_t>(k);
         codeword.reserve(num_blocks * static_cast<std::size_t>(n));
         
         for (std::size_t i = 0; i < info_bits; i += static_cast<std::size_t>(k)) {
           std::vector<uint8_t> block(data.begin() + i, data.begin() + i + k);
-          std::vector<uint8_t> encoded = codec->Encode(block);
+          std::vector<uint8_t> encoded = encoder->Encode(block);
           codeword.insert(codeword.end(), encoded.begin(), encoded.end());
         }
         
@@ -447,7 +377,7 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i + n <= coded_hard.size(); i += n) {
           std::vector<uint8_t> cw(coded_hard.begin() + i, 
                                   coded_hard.begin() + i + n);
-          std::vector<uint8_t> decoded_block = codec->DecodeHard(cw);
+          std::vector<uint8_t> decoded_block = decoder->Decode(cw);
           decoded_data.insert(decoded_data.end(), 
                               decoded_block.begin(), 
                               decoded_block.end());
@@ -464,7 +394,7 @@ int main(int argc, char** argv) {
     // === Output CSV Row ===
     std::cout << snr_db;
     if (options.run_bpsk) {
-      if (coded_mode_requested) {
+      if (options.r > 0) {
         std::cout << "," << bpsk_ber_uncoded << "," << bpsk_ber_coded
                   << "," << bpsk_errors_uncoded << "," << bpsk_errors_coded;
       } else {
@@ -472,7 +402,7 @@ int main(int argc, char** argv) {
       }
     }
     if (options.run_qpsk) {
-      if (coded_mode_requested) {
+      if (options.r > 0) {
         std::cout << "," << qpsk_ber_uncoded << "," << qpsk_ber_coded
                   << "," << qpsk_errors_uncoded << "," << qpsk_errors_coded;
       } else {
