@@ -8,13 +8,26 @@ cmake --build build
 
 Сборка с AFF3CT (скачивание выполняется автоматически из CMake):
 ```
-cmake -S . -B build -DENABLE_AFF3CT=ON
-cmake --build build
+cmake -S . -B build-aff3ct -DENABLE_AFF3CT=ON -DBUILD_TESTING=OFF
+cmake --build build-aff3ct -j1
 ```
 
 ### Тесты
 ```
 ctest --test-dir build
+```
+
+Тесты с AFF3CT:
+```bash
+cmake -S . -B build-aff3ct-tests -DENABLE_AFF3CT=ON -DBUILD_TESTING=ON
+cmake --build build-aff3ct-tests -j1
+ctest --test-dir build-aff3ct-tests --output-on-failure -j1
+```
+
+Генерация `compile_commands.json` для IDE:
+```bash
+cmake -S . -B build-aff3ct -DENABLE_AFF3CT=ON -DBUILD_TESTING=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+ln -sfn build-aff3ct/compile_commands.json compile_commands.json
 ```
 
 ### FEC (текущий статус)
