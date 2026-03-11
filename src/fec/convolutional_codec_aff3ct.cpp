@@ -82,6 +82,8 @@ ConvolutionalCodecAff3ct::ConvolutionalCodecAff3ct(const FecConfig& config)
 #endif
 }
 
+ConvolutionalCodecAff3ct::~ConvolutionalCodecAff3ct() = default;
+
 int ConvolutionalCodecAff3ct::input_bits_per_frame() const {
   return input_bits_per_frame_;
 }

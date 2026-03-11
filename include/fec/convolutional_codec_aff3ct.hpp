@@ -17,6 +17,7 @@ namespace harq::fec {
 class ConvolutionalCodecAff3ct final : public IFecCodec {
  public:
   explicit ConvolutionalCodecAff3ct(const FecConfig& config);
+  ~ConvolutionalCodecAff3ct() override;
 
   int input_bits_per_frame() const override;
   int output_bits_per_frame() const override;
