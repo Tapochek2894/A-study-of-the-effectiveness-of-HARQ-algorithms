@@ -14,13 +14,15 @@ ctest --test-dir build
 ### FEC (текущий статус)
 - Введён frame-based интерфейс кодека (`IFecCodec`).
 - Поддерживается backend `hamming`.
-- Добавлен каркас backend `conv` (AFF3CT) с fallback при недоступной зависимости.
+- Поддерживается backend `conv` через AFF3CT (`RSC` кодек, SIHO/SISO декодирование).
+- При недоступной зависимости AFF3CT backend `conv` выдаёт понятную ошибку.
+- Для `conv` фактическая длина кодового слова определяется параметрами RSC-кодера AFF3CT.
 
 ### Симулятор `bpsk_awgn_sim`
 Режимы:
 - uncoded: без `--r` и без `--codec conv`;
 - coded hamming: `--codec hamming --r <parity_bits>`;
-- coded conv (каркас): `--codec conv --conv-k <bits> --conv-rate <num/den> --conv-decoder <viterbi|bcjr>`.
+- coded conv (AFF3CT): `--codec conv --conv-k <bits> --conv-rate <num/den> --conv-decoder <viterbi|bcjr>`.
 
 Примеры:
 ```bash
@@ -30,7 +32,7 @@ ctest --test-dir build
 # coded hamming (7,4)
 ./build/bpsk_awgn_sim --bits 200000 --codec hamming --r 3 --snr 0,2,4,6
 
-# coded conv (пока требует AFF3CT и завершится с понятной ошибкой без него)
+# coded conv
 ./build/bpsk_awgn_sim --bits 200000 --codec conv --conv-k 1024 --conv-rate 1/2 --conv-decoder viterbi --snr 0,2,4,6
 ```
 
