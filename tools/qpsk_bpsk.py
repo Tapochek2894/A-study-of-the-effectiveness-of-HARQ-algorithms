@@ -11,7 +11,7 @@ def q_func(x):
 
 def ber_theory(snr_db):
     snr_lin = 10 ** (np.asarray(snr_db) / 10.0)
-    return q_func(np.sqrt(2.0 * snr_lin) / np.sqrt(2.0))
+    return q_func(np.sqrt(2.0 * snr_lin))
 
 def main():
     parser = argparse.ArgumentParser()

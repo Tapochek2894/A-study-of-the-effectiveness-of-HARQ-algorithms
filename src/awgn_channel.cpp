@@ -67,7 +67,7 @@ void AwgnChannel::UpdateSigma() {
     throw std::invalid_argument("SNR must be positive.");
   }
 
-  sigma2_ = 1.0 / snr_linear;
+  sigma2_ = 1.0 / (2 * snr_linear);
   sigma_ = std::sqrt(sigma2_);
 }
 
@@ -77,7 +77,7 @@ AwgnChannel::TransmitComplex(const std::vector<std::complex<double>>& symbols) {
     std::normal_distribution<double> dist(0.0, sigma_);
     double snr_linear = std::pow(10.0, snr_db_ / 10.0);
     
-    sigma_ = std::sqrt(1.0 / (2.0 * snr_linear));
+    sigma_ = std::sqrt(1.0 / (4.0 * snr_linear));
     std::vector<std::complex<double>> noisy_symbols;
     noisy_symbols.reserve(symbols.size());
 
