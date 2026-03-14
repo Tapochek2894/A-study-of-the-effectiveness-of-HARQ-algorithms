@@ -138,3 +138,9 @@ add_executable(arq_chase_sim
 )
 
 target_link_libraries(arq_chase_sim PRIVATE harq)
+
+add_executable(fec_arq_harq_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/fec_arq_harq_sim.cpp
+)
+
+target_link_libraries(fec_arq_harq_sim PRIVATE harq)
