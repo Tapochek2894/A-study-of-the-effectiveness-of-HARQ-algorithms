@@ -19,11 +19,12 @@ class QpskDemodulator {
 public:
     std::vector<double> Demodulate(const std::vector<std::complex<double>>& symbols,
                                                 double snr_db) const;
-private:
-    std::pair<double, double> ComputeLlr(const std::complex<double>& symbol,
-                                                      double snr_linear) const;
+    
+    std::vector<uint8_t> DemodulateHard(const std::vector<std::complex<double>> &symbols, double snr_db) const;
 };
 
-std::vector<double> QpskDemodulate(const std::vector<double>& symbols, double snr_db);
+std::vector<double> QpskDemodulate(const std::vector<std::complex<double>>& symbols, double snr_db);
+
+std::vector<uint8_t> QpskDemodulateHard(const std::vector<std::complex<double>>& symbols, double snr_db);
 
 }  // namespace harq

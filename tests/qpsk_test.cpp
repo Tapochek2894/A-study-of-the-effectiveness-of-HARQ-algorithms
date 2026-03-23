@@ -19,16 +19,16 @@ TEST(QpskModulatorTest, QpskMapping) {
     harq::QpskModulator modulator;
 
     auto symbols = modulator.Modulate({0, 0});
-    EXPECT_NEAR(symbols[0].real(), 1.0 / std::sqrt(2.0), EPSILON);
-    EXPECT_NEAR(symbols[0].imag(), 1.0 / std::sqrt(2.0), EPSILON);
-
-    symbols = modulator.Modulate({1, 1});
     EXPECT_NEAR(symbols[0].real(), -1.0 / std::sqrt(2.0), EPSILON);
     EXPECT_NEAR(symbols[0].imag(), -1.0 / std::sqrt(2.0), EPSILON);
 
-    symbols = modulator.Modulate({0, 1});
+    symbols = modulator.Modulate({1, 1});
     EXPECT_NEAR(symbols[0].real(), 1.0 / std::sqrt(2.0), EPSILON);
-    EXPECT_NEAR(symbols[0].imag(), -1.0 / std::sqrt(2.0), EPSILON);
+    EXPECT_NEAR(symbols[0].imag(), 1.0 / std::sqrt(2.0), EPSILON);
+
+    symbols = modulator.Modulate({0, 1});
+    EXPECT_NEAR(symbols[0].real(), -1.0 / std::sqrt(2.0), EPSILON);
+    EXPECT_NEAR(symbols[0].imag(), 1.0 / std::sqrt(2.0), EPSILON);
 }
 
 TEST(QpskModulatorTest, OutputCount) {
@@ -68,13 +68,14 @@ TEST(QpskDemodulatorTest, LlrSignConvention) {
 TEST(QpskDemodulatorTest, LlrMagnitude) {
     harq::QpskDemodulator demodulator;
 
-    double snr_db = 10.0 * std::log10(5.0);
-
-    std::complex<double> symbol(1.0 / std::sqrt(2.0), 0);
+    double snr_db = 10.0; 
+    double snr_lin = std::pow(10.0, snr_db / 10.0); 
+    std::complex<double> symbol(-1.0 / std::sqrt(2.0), -1.0 / std::sqrt(2.0));
 
     auto demodulated = demodulator.Demodulate({symbol}, snr_db);
 
-    double expected = 2.0 * std::sqrt(2.0) * 5.0 * symbol.real();
+    double expected = 4.0 * snr_lin * symbol.real(); 
+    
     EXPECT_NEAR(std::abs(demodulated[0]), std::abs(expected), EPSILON);
 }
 
@@ -90,5 +91,5 @@ TEST(QpskDemodulatorTest, DemodulateVector) {
     EXPECT_EQ(llrs.size(), 6);
 
     EXPECT_LT(llrs[0], 0);
-    EXPECT_GT(llrs[1], 0);
+    EXPECT_GT(llrs[1], 0); 
 }
