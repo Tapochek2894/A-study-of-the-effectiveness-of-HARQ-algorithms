@@ -116,6 +116,12 @@ add_executable(chase_ham_sim
 
 target_link_libraries(chase_ham_sim PRIVATE harq)
 
+add_executable(chase_conv_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/chase_conv_sim.cpp
+)
+
+target_link_libraries(chase_conv_sim PRIVATE harq)
+
 add_executable(chase_comb_ham
     ${CMAKE_CURRENT_LIST_DIR}/../tools/chase_comb_ham.cpp
 )
@@ -138,3 +144,9 @@ add_executable(arq_chase_sim
 )
 
 target_link_libraries(arq_chase_sim PRIVATE harq)
+
+add_executable(fec_arq_harq_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/fec_arq_harq_sim.cpp
+)
+
+target_link_libraries(fec_arq_harq_sim PRIVATE harq)

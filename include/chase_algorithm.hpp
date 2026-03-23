@@ -3,6 +3,8 @@
 #include <vector>
 #include <cstdint>
 #include "hamming_decoder.hpp"
+#include "fec/fec_config.hpp"
+#include "fec/fec_factory.hpp"
 
 namespace harq {
 
@@ -34,8 +36,15 @@ std::vector<uint8_t> DecodeHammingCodesWithChase(
     ProbeAlgorithm probe_algorithm,
     HammingDecoder decoder);
 
+std::vector<uint8_t> DecodeConvCodesWithChase(
+    const std::vector<double>& received_soft_bits,
+    ProbeAlgorithm probe_algorithm, std::unique_ptr<fec::IFecCodec>& codec, int d);
+
 std::vector<uint8_t> DecodeHammingML(
     const std::vector<double>& soft_bits,
     const HammingDecoder& decoder);
+
+double ComputeSoftDistanceConv(const std::vector<uint8_t>& codeword,
+                           const std::vector<double>& soft_bits);    
 
 } // namespace harq
