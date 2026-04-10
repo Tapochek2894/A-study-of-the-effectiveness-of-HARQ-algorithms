@@ -12,5 +12,8 @@ std::vector<uint8_t> ChaseCombiningHammingNoCRC(
     const HammingDecoder& decoder,
     std::vector<std::vector<double>> soft_bits);
 
+std::vector<uint8_t> ChaseCombiningConvNoCRC(harq::ProbeAlgorithm ProbeAlgorithm,
+    std::unique_ptr<fec::IFecCodec>& codec, std::vector<std::vector<double>> soft_bits, int d);
+
 } // namespace harq
 

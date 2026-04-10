@@ -128,6 +128,18 @@ add_executable(chase_comb_ham
 
 target_link_libraries(chase_comb_ham PRIVATE harq)
 
+add_executable(chase_comb_conv
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/chase_comb_conv.cpp
+)
+
+target_link_libraries(chase_comb_conv PRIVATE harq)
+
+add_executable(chase_comb_conv_ber
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/chase_comb_conv_ber.cpp
+)
+
+target_link_libraries(chase_comb_conv_ber PRIVATE harq)
+
 add_executable(qpsk_bpsk_sim
     ${CMAKE_CURRENT_LIST_DIR}/../tools/qpsk_bpsk.cpp
 )

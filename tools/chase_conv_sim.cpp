@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
   }
 
   // CSV заголовок
-  std::cout << "snr_db,ber_uncoded,ber_viterbi";
+  std::cout << "snr_db,ber_uncoded,ber_viterbi,ber_viterbi_soft";
   if (options.enable_chase1) std::cout << ",ber_chase1";
   if (options.enable_chase2) std::cout << ",ber_chase2";
   if (options.enable_chase3) std::cout << ",ber_chase3";
@@ -316,11 +316,13 @@ int main(int argc, char **argv) {
     // Viterbi (soft-decision)
     std::vector<uint8_t> decoded_viterbi;
     decoded_viterbi.reserve(aligned_bits);
+    std::vector<uint8_t> decoded_viterbi_soft;
+    decoded_viterbi_soft.reserve(aligned_bits);
     
     for (std::size_t i = 0; i < coded_bits.size(); i += output_frame_size) {
-      // std::vector<double> frame_soft(soft_demod.begin() + i, soft_demod.begin() + i + output_frame_size);
-      // for (auto& val : frame_soft) val = -val;
-      // auto dec = codec->DecodeSoft(frame_soft);
+      std::vector<double> frame_soft(soft_demod.begin() + i, soft_demod.begin() + i + output_frame_size);
+      auto dec_soft = codec->DecodeSoft(frame_soft);
+      decoded_viterbi_soft.insert(decoded_viterbi_soft.end(), dec_soft.begin(), dec_soft.end());
 
       std::vector<uint8_t> frame_hard(hard_demod.begin() + i, hard_demod.begin() + i + output_frame_size);
       auto dec = codec->DecodeHard(frame_hard);
@@ -329,6 +331,8 @@ int main(int argc, char **argv) {
     }
     const std::size_t errors_viterbi = CountErrors(decoded_viterbi, info_bits);
     const double ber_viterbi = static_cast<double>(errors_viterbi) / aligned_bits;
+    const std::size_t errors_viterbi_soft = CountErrors(decoded_viterbi_soft, info_bits);
+    const double ber_viterbi_soft = static_cast<double>(errors_viterbi_soft) / aligned_bits;
 
     // Chase decoding
     std::size_t errors_chase1 = 0, errors_chase2 = 0, errors_chase3 = 0;
@@ -364,7 +368,7 @@ int main(int argc, char **argv) {
     }
 
     // Вывод
-    std::cout << snr_db << "," << ber_uncoded << "," << ber_viterbi;
+    std::cout << snr_db << "," << ber_uncoded << "," << ber_viterbi << "," << ber_viterbi_soft;
     if (options.enable_chase1) std::cout << "," << static_cast<double>(errors_chase1) / aligned_bits;
     if (options.enable_chase2) std::cout << "," << static_cast<double>(errors_chase2) / aligned_bits;
     if (options.enable_chase3) std::cout << "," << static_cast<double>(errors_chase3) / aligned_bits;

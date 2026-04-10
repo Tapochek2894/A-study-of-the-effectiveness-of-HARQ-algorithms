@@ -209,15 +209,14 @@ double ComputeSoftDistance(const std::vector<uint8_t>& codeword,
   return dist;
 }
 
-double ComputeSoftDistanceConv(const std::vector<uint8_t>& codeword,
-                     const std::vector<double>& soft_bits) {
+double ComputeSoftDistance(const std::vector<double>& codeword,
+                           const std::vector<double>& soft_bits) {
   double dist = 0.0;
   for (std::size_t i = 0; i < codeword.size(); ++i) {
-    double symbol = codeword[i] ? 1.0 : -1.0;
-    double diff = symbol - soft_bits[i];  // Евклидово расстояние
+    double diff = codeword[i] - soft_bits[i];
     dist += diff * diff;
   }
-  return dist;  // Минимизировать!
+  return dist;
 }
 
 std::vector<uint8_t> DecodeHammingCodesWithChase(
@@ -371,6 +370,73 @@ std::vector<uint8_t> DecodeConvCodesWithChase(
   for (const auto& probe : probe_seqs) {
     auto perturbed = AddErrorVector(hard_bits, probe);
     auto info = codec->DecodeHard(perturbed);
+    auto cw = codec->Encode(info);
+    
+    cand_info.push_back(std::move(info));
+    cand_cw.push_back(std::move(cw));
+  }
+
+  std::size_t best = 0;
+  double min_dist = std::numeric_limits<double>::max();
+  for (std::size_t i = 0; i < cand_cw.size(); ++i) {
+    double dist = ComputeSoftDistance(cand_cw[i], received_soft_bits);
+    if (dist < min_dist) {
+      min_dist = dist;
+      best = i;
+    }
+  }
+
+  return cand_info[best];
+}
+
+std::vector<double> AddErrorVectorSoft(const std::vector<double> &DataVector,
+                                        const std::vector<uint8_t> &ErrorVector) {
+  std::vector<double> NewVector(DataVector.size(), 0);
+  for (std::size_t i = 0; i < NewVector.size(); ++i) {
+    if (ErrorVector[i] == 0) {
+      NewVector[i] = DataVector[i];
+    } else {
+      NewVector[i] = -DataVector[i];
+    }
+  }
+  return NewVector;
+}
+
+std::vector<uint8_t> DecodeConvCodesWithChaseSoft(
+    const std::vector<double>& received_soft_bits,
+    ProbeAlgorithm probe_algorithm, 
+    std::unique_ptr<fec::IFecCodec>& codec, int d) {
+
+  if (received_soft_bits.empty()) {
+    throw std::invalid_argument("received_soft_bits must not be empty");
+  }
+
+  const int n = static_cast<int>(received_soft_bits.size());
+
+  std::vector<std::vector<uint8_t>> probe_seqs;
+  
+  switch (probe_algorithm) {
+    case ProbeAlgorithm::First:
+        probe_seqs = generate_probe_sequences_1(n, d);
+        break;
+    case ProbeAlgorithm::Second:
+        probe_seqs = generate_probe_sequences_2(n, d, received_soft_bits);
+        break;
+    case ProbeAlgorithm::Third:
+        probe_seqs = generate_probe_sequences_3(n, d, received_soft_bits);
+        break;
+    default:
+      throw std::invalid_argument("Unknown probe algorithm");
+  }
+
+  std::vector<std::vector<uint8_t>> cand_info;
+  std::vector<std::vector<uint8_t>> cand_cw;
+  cand_info.reserve(probe_seqs.size());
+  cand_cw.reserve(probe_seqs.size());
+
+  for (const auto& probe : probe_seqs) {
+    auto perturbed = AddErrorVectorSoft(received_soft_bits, probe);
+    auto info = codec->DecodeSoft(perturbed);
     auto cw = codec->Encode(info);
     
     cand_info.push_back(std::move(info));

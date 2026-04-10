@@ -40,11 +40,12 @@ std::vector<uint8_t> DecodeConvCodesWithChase(
     const std::vector<double>& received_soft_bits,
     ProbeAlgorithm probe_algorithm, std::unique_ptr<fec::IFecCodec>& codec, int d);
 
+std::vector<uint8_t> DecodeConvCodesWithChaseSoft(
+    const std::vector<double>& received_soft_bits,
+    ProbeAlgorithm probe_algorithm, std::unique_ptr<fec::IFecCodec>& codec, int d);
+
 std::vector<uint8_t> DecodeHammingML(
     const std::vector<double>& soft_bits,
     const HammingDecoder& decoder);
-
-double ComputeSoftDistanceConv(const std::vector<uint8_t>& codeword,
-                           const std::vector<double>& soft_bits);    
 
 } // namespace harq
