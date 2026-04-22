@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include "crc.hpp"
 
 namespace {
 
@@ -211,7 +212,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  // Создание кодека (использует дефолтные полиномы библиотеки)
+  harq::Crc crc({1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1});
+
   harq::fec::FecConfig cfg{};
   cfg.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
   cfg.conv_input_bits_per_frame = static_cast<std::size_t>(options.conv_k);
@@ -225,9 +227,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  const std::size_t input_frame_size = codec->input_bits_per_frame();
+  const std::size_t input_frame_size = codec->input_bits_per_frame() - crc.polynomial().size() + 1;
   const std::size_t output_frame_size = codec->output_bits_per_frame();
-
   // === ВЫЧИСЛЕНИЕ d_free ===
   int d_free = options.conv_dfree;
   if (d_free < 0) {
@@ -301,7 +302,7 @@ int main(int argc, char **argv) {
     
     for (std::size_t i = 0; i < aligned_bits; i += input_frame_size) {
       std::vector<uint8_t> frame(info_bits.begin() + i, info_bits.begin() + i + input_frame_size);
-      auto encoded = codec->Encode(frame);
+      auto encoded = codec->Encode(crc.Encode(frame));
       coded_bits.insert(coded_bits.end(), encoded.begin(), encoded.end());
     }
 
@@ -321,11 +322,11 @@ int main(int argc, char **argv) {
     
     for (std::size_t i = 0; i < coded_bits.size(); i += output_frame_size) {
       std::vector<double> frame_soft(soft_demod.begin() + i, soft_demod.begin() + i + output_frame_size);
-      auto dec_soft = codec->DecodeSoft(frame_soft);
+      auto dec_soft = crc.Decode(codec->DecodeSoft(frame_soft));
       decoded_viterbi_soft.insert(decoded_viterbi_soft.end(), dec_soft.begin(), dec_soft.end());
 
       std::vector<uint8_t> frame_hard(hard_demod.begin() + i, hard_demod.begin() + i + output_frame_size);
-      auto dec = codec->DecodeHard(frame_hard);
+      auto dec = crc.Decode(codec->DecodeHard(frame_hard));
       
       decoded_viterbi.insert(decoded_viterbi.end(), dec.begin(), dec.end());
     }
@@ -344,22 +345,22 @@ int main(int argc, char **argv) {
         std::size_t info_start = frame_idx * input_frame_size;
         
         if (options.enable_chase1) {
-          auto dec = harq::DecodeConvCodesWithChase(
-              frame_soft, harq::ProbeAlgorithm::First, codec, d_free);
+          auto dec = harq::DecodeConvCodesWithChaseSoft(
+              frame_soft, harq::ProbeAlgorithm::First, codec, d_free, crc);
           for (std::size_t j = 0; j < dec.size(); ++j) {
             if (dec[j] != info_bits[info_start + j]) ++errors_chase1;
           }
         }
         if (options.enable_chase2) {
-          auto dec = harq::DecodeConvCodesWithChase(
-              frame_soft, harq::ProbeAlgorithm::Second, codec, d_free);
+          auto dec = harq::DecodeConvCodesWithChaseSoft(
+              frame_soft, harq::ProbeAlgorithm::Second, codec, d_free, crc);
           for (std::size_t j = 0; j < dec.size(); ++j) {
             if (dec[j] != info_bits[info_start + j]) ++errors_chase2;
           }
         }
         if (options.enable_chase3) {
-          auto dec = harq::DecodeConvCodesWithChase(
-              frame_soft, harq::ProbeAlgorithm::Third, codec, d_free);
+          auto dec = harq::DecodeConvCodesWithChaseSoft(
+              frame_soft, harq::ProbeAlgorithm::Third, codec, d_free, crc);
           for (std::size_t j = 0; j < dec.size(); ++j) {
             if (dec[j] != info_bits[info_start + j]) ++errors_chase3;
           }

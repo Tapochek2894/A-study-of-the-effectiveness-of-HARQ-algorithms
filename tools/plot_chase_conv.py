@@ -58,7 +58,7 @@ def parse_args():
     )
     parser.add_argument(
         "--title",
-        default="BER vs SNR (BPSK AWGN)",
+        default="BER vs SNR (QPSK AWGN)",
         help="Plot title",
     )
     return parser.parse_args()

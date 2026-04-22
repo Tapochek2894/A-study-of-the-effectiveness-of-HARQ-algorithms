@@ -5,7 +5,7 @@
 #include "hamming_decoder.hpp"
 #include "fec/fec_config.hpp"
 #include "fec/fec_factory.hpp"
-
+#include "crc.hpp"
 namespace harq {
 
 enum class ProbeAlgorithm {
@@ -42,7 +42,8 @@ std::vector<uint8_t> DecodeConvCodesWithChase(
 
 std::vector<uint8_t> DecodeConvCodesWithChaseSoft(
     const std::vector<double>& received_soft_bits,
-    ProbeAlgorithm probe_algorithm, std::unique_ptr<fec::IFecCodec>& codec, int d);
+    ProbeAlgorithm probe_algorithm, 
+    std::unique_ptr<fec::IFecCodec>& codec, int d, harq::Crc& crc);
 
 std::vector<uint8_t> DecodeHammingML(
     const std::vector<double>& soft_bits,

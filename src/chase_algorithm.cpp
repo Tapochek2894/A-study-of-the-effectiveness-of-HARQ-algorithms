@@ -8,6 +8,7 @@
 #include "hamming_encoder.hpp"
 #include <iostream>
 #include <cmath>
+#include "crc.hpp"
 
 namespace harq {
 
@@ -405,14 +406,18 @@ std::vector<double> AddErrorVectorSoft(const std::vector<double> &DataVector,
 std::vector<uint8_t> DecodeConvCodesWithChaseSoft(
     const std::vector<double>& received_soft_bits,
     ProbeAlgorithm probe_algorithm, 
-    std::unique_ptr<fec::IFecCodec>& codec, int d) {
-
+    std::unique_ptr<fec::IFecCodec>& codec, int d, harq::Crc& crc) {
   if (received_soft_bits.empty()) {
     throw std::invalid_argument("received_soft_bits must not be empty");
   }
 
-  const int n = static_cast<int>(received_soft_bits.size());
 
+  const int n = static_cast<int>(received_soft_bits.size());
+  
+  std::vector<uint8_t> hard_bits(n);
+  for (int i = 0; i < n; ++i) {
+    hard_bits[i] = received_soft_bits[i] >= 0.0 ? 1 : 0;
+  }
   std::vector<std::vector<uint8_t>> probe_seqs;
   
   switch (probe_algorithm) {
@@ -429,31 +434,14 @@ std::vector<uint8_t> DecodeConvCodesWithChaseSoft(
       throw std::invalid_argument("Unknown probe algorithm");
   }
 
-  std::vector<std::vector<uint8_t>> cand_info;
-  std::vector<std::vector<uint8_t>> cand_cw;
-  cand_info.reserve(probe_seqs.size());
-  cand_cw.reserve(probe_seqs.size());
-
   for (const auto& probe : probe_seqs) {
     auto perturbed = AddErrorVectorSoft(received_soft_bits, probe);
     auto info = codec->DecodeSoft(perturbed);
-    auto cw = codec->Encode(info);
-    
-    cand_info.push_back(std::move(info));
-    cand_cw.push_back(std::move(cw));
-  }
-
-  std::size_t best = 0;
-  double min_dist = std::numeric_limits<double>::max();
-  for (std::size_t i = 0; i < cand_cw.size(); ++i) {
-    double dist = ComputeSoftDistance(cand_cw[i], received_soft_bits);
-    if (dist < min_dist) {
-      min_dist = dist;
-      best = i;
+    if (!crc.HasError(info)) {
+      return crc.Decode(info);
     }
   }
-
-  return cand_info[best];
+  return crc.Decode(codec->DecodeSoft(received_soft_bits));
 }
 
 } // namespace harq
