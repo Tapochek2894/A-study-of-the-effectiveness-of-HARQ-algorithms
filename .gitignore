@@ -12,6 +12,12 @@ Makefile
 *_include.cmake
 *_tests.cmake
 .cache
+*.png
+*.csv
+build-aff3ct-tests/
+cmake/DartConfiguration.tcl
+cmake/_deps/
+cmake/bpsk_tests
 
 # Compilers
 *.o
