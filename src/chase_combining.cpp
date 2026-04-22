@@ -16,7 +16,6 @@ struct candidate {
 std::vector<uint8_t> ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm ProbeAlgorithm,
     const harq::HammingDecoder& decoder, std::vector<std::vector<double>> soft_bits) {
 
-    // MRC: суммируем мягкие значения всех передач
     std::size_t n = soft_bits[0].size();
     std::vector<double> combined(n, 0.0);
     for (const auto& transmission : soft_bits) {
@@ -24,8 +23,11 @@ std::vector<uint8_t> ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm ProbeAlgori
             combined[i] += transmission[i];
         }
     }
+    
+    for (auto& i : combined) {
+        i /= soft_bits.size();
+    }
 
-    // Chase-декодирование суммарного вектора
     return DecodeHammingCodesWithChase(combined, ProbeAlgorithm, decoder);
 }
 
@@ -38,6 +40,10 @@ std::vector<uint8_t> ChaseCombiningConvNoCRC(harq::ProbeAlgorithm ProbeAlgorithm
         for (std::size_t i = 0; i < n; ++i) {
             combined[i] += transmission[i];
         }
+    }
+
+    for (auto& i : combined) {
+        i /= soft_bits.size();
     }
 
     return DecodeConvCodesWithChase(combined, ProbeAlgorithm, codec, d);
