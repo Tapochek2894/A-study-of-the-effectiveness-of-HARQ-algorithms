@@ -1,104 +1,171 @@
 #include "awgn_channel.hpp"
-#include "qpsk.hpp"  // или bpsk.hpp, если нужна BPSK
-#include "chase_combining.hpp"
 #include "bpsk.hpp"
+#include "chase_combining.hpp"
 #include "fec/fec_factory.hpp"
-#include <cmath>
+#include "crc.hpp"
+
 #include <cstdint>
 #include <iostream>
 #include <vector>
 #include <iomanip>
-#include <memory>
+#include <random>
+#include <algorithm>
 
-const int N = 2000;           // число независимых испытаний
+const int N = 10000;
 const int MaximumAttempts = 10;
 const uint32_t seed = 53u;
 
-// Параметры свёрточного кода
-const int CONV_K = 64;                    // информационных бит на фрейм
-const int CONV_RATE_NUM = 1;               // скорость кода: num/den
+const int CONV_K = 256;
+const int CONV_RATE_NUM = 1;
 const int CONV_RATE_DEN = 2;
-const int CONV_DFREE = 10;                 // свободное расстояние (для Chase)
 
 const std::vector<double> snr_values = {
-    -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5
+    -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2
 };
 
-double simulate(double snr_db, harq::ProbeAlgorithm algo, bool combining) {
+enum class CrcType { k24 };
+
+harq::Crc CreateCrcByType(CrcType type)
+{
+    switch (type) {
+        case CrcType::k24:
+            return harq::Crc({
+                1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                1,1,0,0,1,1,0,1,1,1
+            });
+    }
+    return harq::Crc({1});
+}
+
+bool IsCrcOk(const harq::Crc& crc,
+             const std::vector<uint8_t>& decoded,
+             std::size_t expected_size)
+{
+    if (decoded.empty()) return false;
+    if (crc.HasError(decoded)) return false;
+
+    auto extracted = crc.Decode(decoded);
+    return extracted.size() == expected_size;
+}
+
+bool Compare(const std::vector<uint8_t>& a,
+             const std::vector<uint8_t>& b)
+{
+    return a.size() == b.size() &&
+           std::equal(a.begin(), a.end(), b.begin());
+}
+
+struct Metrics {
+    double bler;
+    double undetected;
+    double goodput;
+};
+
+Metrics simulate(double snr_db, bool combining)
+{
+    harq::Crc crc = CreateCrcByType(CrcType::k24);
+
     harq::fec::FecConfig cfg{};
     cfg.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
-    cfg.conv_input_bits_per_frame = static_cast<std::size_t>(CONV_K);
+    cfg.conv_input_bits_per_frame = CONV_K;
     cfg.conv_rate_num = CONV_RATE_NUM;
     cfg.conv_rate_den = CONV_RATE_DEN;
     cfg.conv_decoder = harq::fec::ConvDecoderType::kViterbi;
 
     auto codec = harq::fec::CreateCodec(cfg);
-    if (!codec) {
-        std::cerr << "Error: Failed to create convolutional codec at SNR " << snr_db << "\n";
-        return static_cast<double>(MaximumAttempts - 1);
-    }
 
-    const std::size_t input_size = codec->input_bits_per_frame();
+    const size_t total_size = codec->input_bits_per_frame();
+    const size_t crc_bits = crc.r();
+    const size_t info_size = total_size - crc_bits;
 
-    std::vector<uint8_t> info_word(input_size);
-    for (std::size_t i = 0; i < input_size; ++i)
-        info_word[i] = static_cast<uint8_t>(i % 2);
+    std::mt19937 rng(seed);
 
-    // Кодируем один раз
-    auto coded_bits = codec->Encode(info_word);
-    auto modulated = harq::BpskModulate(coded_bits); 
-
-    std::size_t total_retransmits = 0;
+    size_t crc_fail = 0;
+    size_t undetected = 0;
+    size_t success_blocks = 0;
+    size_t total_tx = 0;
 
     for (int i = 0; i < N; ++i) {
-        std::vector<std::vector<double>> soft_history;
-        int attempts = 0;
 
-        for (int j = 0; j < MaximumAttempts; ++j) {
-            harq::AwgnChannel channel(snr_db,
-                static_cast<uint32_t>(seed + i * MaximumAttempts + j * j * j));
-            auto soft_bits = channel.AddNoise(modulated);
+        std::vector<uint8_t> info(info_size);
+        for (auto& b : info) b = rng() & 1;
 
-            std::vector<uint8_t> decision;
+        auto crc_encoded = crc.Encode(info);
+        auto coded = codec->Encode(crc_encoded);
+        auto modulated = harq::BpskModulate(coded);
+
+        std::vector<std::vector<double>> history;
+
+        bool crc_passed = false;
+        bool correct = false;
+
+        for (int attempt = 0; attempt < MaximumAttempts; ++attempt) {
+
+            total_tx++;
+
+            harq::AwgnChannel channel(
+                snr_db,
+                seed + i * 100 + attempt
+            );
+
+            auto soft = channel.AddNoise(modulated);
+
+            std::vector<uint8_t> decoded;
+
             if (combining) {
-                soft_history.push_back(soft_bits);
-                decision = harq::ChaseCombiningConvNoCRC(algo, codec, soft_history, CONV_DFREE);
+                history.push_back(soft);
+                decoded = harq::ChaseCombiningConvNoCRC(codec, history);
             } else {
-                decision = harq::DecodeConvCodesWithChase(soft_bits, algo, codec, CONV_DFREE);
+                decoded = codec->DecodeSoft(soft);
             }
 
-            attempts = j + 1;
-            bool error = false;
-            for (std::size_t idx = 0; idx < info_word.size(); ++idx) {
-                if (decision[idx] != info_word[idx]) { error = true; break; }
+            if (IsCrcOk(crc, decoded, info_size)) {
+                crc_passed = true;
+
+                auto extracted = crc.Decode(decoded);
+                correct = Compare(extracted, info);
+
+                break;
             }
-            if (!error) break;
         }
 
-        total_retransmits += static_cast<std::size_t>(attempts - 1);
-    }
-    
-    return static_cast<double>(total_retransmits) / static_cast<double>(N);
+        if (crc_passed) success_blocks++;
+        else crc_fail++;
 
+        if (crc_passed && !correct) undetected++;
+    }
+
+    double success_rate = (double)success_blocks / N;
+    double avg_tx = (double)total_tx / N;
+
+    double goodput = (info_size * success_rate) / avg_tx;
+
+    return {
+        (double)crc_fail / N,
+        (double)undetected / N,
+        goodput
+    };
 }
 
-
-int main() {
+int main()
+{
     std::cout << std::fixed << std::setprecision(6);
-    std::cout << "snr_db,"
-              << "chase2_combining,chase3_combining,"
-              << "chase2_no_comb,chase3_no_comb"
-              << std::endl;
 
-    for (auto snr_db : snr_values) {
-        double c2  = simulate(snr_db, harq::ProbeAlgorithm::Second, true);
-        double c3  = simulate(snr_db, harq::ProbeAlgorithm::Third,  true);
-        double nc2 = simulate(snr_db, harq::ProbeAlgorithm::Second, false);
-        double nc3 = simulate(snr_db, harq::ProbeAlgorithm::Third,  false);
+    std::cout << "snr,"
+              << "bler_comb,und_comb,gput_comb,"
+              << "bler_no,und_no,gput_no\n";
 
-        std::cout << snr_db << "," << c2  << "," << c3  << "," << nc2 << "," << nc3 << std::endl;
-        
-        std::cerr << "SNR " << snr_db << " dB done.\n";
+    for (auto snr : snr_values) {
+
+        auto comb = simulate(snr, true);
+        auto no   = simulate(snr, false);
+
+        std::cout << snr << ","
+                  << comb.bler << "," << comb.undetected << "," << comb.goodput << ","
+                  << no.bler   << "," << no.undetected   << "," << no.goodput
+                  << "\n";
+
+        std::cerr << "SNR " << snr << " done\n";
     }
 
     return 0;
