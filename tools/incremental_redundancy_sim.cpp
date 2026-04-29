@@ -1,5 +1,5 @@
 #include "awgn_channel.hpp"
-#include "bpsk.hpp"
+#include "qpsk.hpp"
 #include "fec/fec_factory.hpp"
 #include "crc.hpp"
 #include "incremental_redundancy.hpp"
@@ -13,7 +13,7 @@
 #include <memory>
 #include <stdexcept>
 
-const int N = 10000;
+const int N = 20000;
 const uint32_t seed = 53u;
 
 const int CONV_K = 256;
@@ -86,8 +86,6 @@ std::vector<std::size_t> BuildRateHalfPuncturingOrderForRateThird(
     std::vector<std::size_t> order;
     order.reserve(codeword_size);
 
-    // RV0 keeps two coded bits from every trellis step, so the whole frame is
-    // represented in the first effective-rate-1/2 transmission.
     for (std::size_t step = 0; step < trellis_steps; ++step) {
         order.push_back(3 * step);
         order.push_back(3 * step + 1);
@@ -201,25 +199,23 @@ Metrics simulate(double snr_db, Scheme scheme)
             std::size_t transmitted_bits = 0;
 
             if (scheme == Scheme::kChaseFull) {
-                auto mod = harq::BpskModulate(coded);
-                soft = channel.Transmit(mod).second;
+                auto mod = harq::QpskModulate(coded);
+                soft = harq::QpskDemodulate(channel.TransmitComplex(mod), snr_db);
                 transmitted_bits = coded.size();
             }
             else if (scheme == Scheme::kIncrementalRedundancy) {
                 auto tx_bits = harq::RateMatch(
                     coded, attempt, bits_per_transmission, perm,
                     IR_REDUNDANCY_VERSIONS);
-                auto mod = harq::BpskModulate(tx_bits);
-                soft = channel.Transmit(mod).second;
+                auto mod = harq::QpskModulate(tx_bits);
+                soft = harq::QpskDemodulate(channel.TransmitComplex(mod), snr_db);
                 transmitted_bits = tx_bits.size();
             } else {
-                // Punctured Chase repeats the same RV0 fragment and gains
-                // only from combining reliability for those transmitted bits.
                 auto tx_bits = harq::RateMatch(
                     coded, 0, bits_per_transmission, perm,
                     IR_REDUNDANCY_VERSIONS);
-                auto mod = harq::BpskModulate(tx_bits);
-                soft = channel.Transmit(mod).second;
+                auto mod = harq::QpskModulate(tx_bits);
+                soft = harq::QpskDemodulate(channel.TransmitComplex(mod), snr_db);
                 transmitted_bits = tx_bits.size();
             }
 

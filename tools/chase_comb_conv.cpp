@@ -1,8 +1,8 @@
 #include "awgn_channel.hpp"
-#include "bpsk.hpp"
 #include "chase_combining.hpp"
 #include "fec/fec_factory.hpp"
 #include "crc.hpp"
+#include "qpsk.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -83,7 +83,7 @@ Metrics simulate(double snr_db, bool combining)
     size_t crc_fail = 0;
     size_t undetected = 0;
     size_t success_blocks = 0;
-    size_t total_tx = 0;
+    size_t total_channel_bits = 0;
 
     for (int i = 0; i < N; ++i) {
 
@@ -92,7 +92,7 @@ Metrics simulate(double snr_db, bool combining)
 
         auto crc_encoded = crc.Encode(info);
         auto coded = codec->Encode(crc_encoded);
-        auto modulated = harq::BpskModulate(coded);
+        auto modulated = harq::QpskModulate(coded);
 
         std::vector<std::vector<double>> history;
 
@@ -101,14 +101,15 @@ Metrics simulate(double snr_db, bool combining)
 
         for (int attempt = 0; attempt < MaximumAttempts; ++attempt) {
 
-            total_tx++;
+            total_channel_bits += coded.size();
 
             harq::AwgnChannel channel(
                 snr_db,
                 seed + i * 100 + attempt
             );
 
-            auto soft = channel.AddNoise(modulated);
+            auto soft = harq::QpskDemodulate(
+                channel.TransmitComplex(modulated), snr_db);
 
             std::vector<uint8_t> decoded;
 
@@ -135,10 +136,9 @@ Metrics simulate(double snr_db, bool combining)
         if (crc_passed && !correct) undetected++;
     }
 
-    double success_rate = (double)success_blocks / N;
-    double avg_tx = (double)total_tx / N;
-
-    double goodput = (info_size * success_rate) / avg_tx;
+    double goodput =
+        static_cast<double>(success_blocks * info_size) /
+        static_cast<double>(total_channel_bits);
 
     return {
         (double)crc_fail / N,

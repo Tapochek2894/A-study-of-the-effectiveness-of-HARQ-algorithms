@@ -9,6 +9,7 @@
 TEST(IncrementalRedundancyTest, DefaultTransmissionSizeCoversUnevenCodewords) {
   EXPECT_EQ(harq::DefaultIrTransmissionSize(518, 4), 130);
   EXPECT_EQ(harq::DefaultIrTransmissionSize(512, 4), 128);
+  EXPECT_EQ(harq::DefaultIrTransmissionSize(10, 4), 4);
 }
 
 TEST(IncrementalRedundancyTest, RateMatchUsesRedundancyVersionWindow) {
@@ -30,6 +31,15 @@ TEST(IncrementalRedundancyTest, RedundancyVersionOffsetUsesTransmissionSize) {
   EXPECT_EQ(harq::RedundancyVersionOffset(780, 1, 512, 4), 512);
   EXPECT_EQ(harq::RedundancyVersionOffset(780, 2, 512, 4), 244);
   EXPECT_EQ(harq::RedundancyVersionOffset(780, 3, 512, 4), 756);
+}
+
+TEST(IncrementalRedundancyTest, RateMatchRoundsTransmissionSizeToEven) {
+  const std::vector<uint8_t> codeword = {0, 1, 0, 1, 1};
+  const std::vector<std::size_t> identity = {0, 1, 2, 3, 4};
+
+  EXPECT_EQ(harq::RateMatch(codeword, 0, 3, identity, 4).size(), 4);
+  EXPECT_EQ(harq::RateMatch(codeword, 1, 3, identity, 4),
+            (std::vector<uint8_t>{1, 0, 1, 0}));
 }
 
 TEST(IncrementalRedundancyTest, DematchCombinesAllPositionsForUnevenCodeword) {

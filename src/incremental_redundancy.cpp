@@ -46,6 +46,10 @@ void ValidatePermutation(const std::vector<std::size_t>& perm,
     }
 }
 
+std::size_t MakeEven(std::size_t value) {
+    return value + (value % 2);
+}
+
 }  // namespace
 
 std::vector<std::size_t> make_perm(std::size_t size, std::uint32_t seed) {
@@ -80,7 +84,7 @@ std::size_t DefaultIrTransmissionSize(std::size_t buffer_size,
         throw std::invalid_argument("redundancy_versions must be positive.");
     }
 
-    return 1 + (buffer_size - 1) / redundancy_versions;
+    return MakeEven(1 + (buffer_size - 1) / redundancy_versions);
 }
 
 std::size_t RedundancyVersionOffset(std::size_t buffer_size,
@@ -102,6 +106,7 @@ std::size_t RedundancyVersionOffset(std::size_t buffer_size,
     if (transmitted_bits == 0) {
         throw std::invalid_argument("transmitted_bits must be positive.");
     }
+    transmitted_bits = MakeEven(transmitted_bits);
 
     const std::size_t normalized_rv = NormalizeRv(rv, redundancy_versions);
     return (normalized_rv * (transmitted_bits % buffer_size)) % buffer_size;
@@ -116,6 +121,7 @@ std::vector<uint8_t> RateMatch(const std::vector<uint8_t>& buffer,
     if (transmitted_bits == 0) {
         throw std::invalid_argument("transmitted_bits must be positive.");
     }
+    transmitted_bits = MakeEven(transmitted_bits);
 
     const std::size_t buffer_size = buffer.size();
     const std::size_t offset =
