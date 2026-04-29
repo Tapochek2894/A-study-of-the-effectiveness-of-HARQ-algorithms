@@ -1,6 +1,7 @@
 #include "fec/convolutional_codec_aff3ct.hpp"
 #include "fec/fec_factory.hpp"
 
+#include "fec/convolutional_codec.hpp"
 #include "fec/hamming_codec.hpp"
 
 #include <stdexcept>
@@ -22,6 +23,8 @@ std::unique_ptr<IFecCodec> CreateCodec(const FecConfig& config) {
                                             config.hamming_extended);
     case CodecType::kConvolutionalAff3ct:
       return std::make_unique<ConvolutionalCodecAff3ct>(config);
+    case CodecType::kConvolutional:
+      return std::make_unique<ConvolutionalCodec>(config);
     default:
       throw std::invalid_argument("Unknown codec type.");
   }

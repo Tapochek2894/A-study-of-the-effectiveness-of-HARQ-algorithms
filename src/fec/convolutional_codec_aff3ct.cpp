@@ -42,6 +42,12 @@ ConvolutionalCodecAff3ct::ConvolutionalCodecAff3ct(const FecConfig& config)
   output_bits_per_frame_ = static_cast<int>(out);
 
 #if HARQ_ENABLE_AFF3CT
+  if (rate_num_ != 1 || rate_den_ != 2) {
+    throw std::invalid_argument(
+        "AFF3CT RSC convolutional backend supports only mother rate 1/2. "
+        "Use a separate codec implementation for rate 1/3.");
+  }
+
   aff3ct::factory::Codec_RSC codec_params;
 
   auto* enc_params =
@@ -53,8 +59,7 @@ ConvolutionalCodecAff3ct::ConvolutionalCodecAff3ct(const FecConfig& config)
         "Failed to initialize AFF3CT RSC codec parameters.");
   }
 
-  // AFF3CT's default RSC setup is a practical baseline for convolutional coding.
-  // The actual frame size is fully defined by K and the chosen polynomials/tail.
+  // AFF3CT's RSC encoder is structurally rate 1/2: N = 2K + tail.
   enc_params->K = input_bits_per_frame_;
   enc_params->buffered = (decoder_type_ == ConvDecoderType::kBcjr);
   enc_params->tail_length = 6;

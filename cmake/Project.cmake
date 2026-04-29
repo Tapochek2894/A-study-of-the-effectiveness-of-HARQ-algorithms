@@ -162,3 +162,9 @@ add_executable(fec_arq_harq_sim
 )
 
 target_link_libraries(fec_arq_harq_sim PRIVATE harq)
+
+add_executable(incremental_redundancy_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/incremental_redundancy_sim.cpp
+)
+
+target_link_libraries(incremental_redundancy_sim PRIVATE harq)

@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace harq::fec {
 
 enum class CodecType {
   kHamming,
-  kConvolutionalAff3ct
+  kConvolutionalAff3ct,
+  kConvolutional
 };
 
 enum class ConvDecoderType {
@@ -25,6 +27,7 @@ struct FecConfig {
   int conv_input_bits_per_frame = 1024;
   int conv_rate_num = 1;
   int conv_rate_den = 2;
+  std::vector<std::uint32_t> conv_generators = {0133, 0171, 0165};
   std::uint32_t conv_seed = 5489u;
   ConvDecoderType conv_decoder = ConvDecoderType::kViterbi;
 };

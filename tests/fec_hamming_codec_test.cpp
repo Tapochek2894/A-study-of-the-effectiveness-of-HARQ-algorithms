@@ -86,20 +86,20 @@ TEST(FecFactoryTest, ConvolutionalCodecReportsConfiguredFrameSizes) {
 #endif
 }
 
-TEST(FecFactoryTest, ConvolutionalCodecRespectsConfiguredRate) {
+TEST(FecFactoryTest, ConvolutionalCodecRejectsUnsupportedAff3ctMotherRate) {
   harq::fec::FecConfig config;
   config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
   config.conv_input_bits_per_frame = 256;
-  config.conv_rate_num = 2;
+  config.conv_rate_num = 1;
   config.conv_rate_den = 3;
 
+#if HARQ_ENABLE_AFF3CT
+  EXPECT_THROW(harq::fec::CreateCodec(config), std::invalid_argument);
+#else
   auto codec = harq::fec::CreateCodec(config);
 
   EXPECT_EQ(codec->input_bits_per_frame(), 256);
-#if HARQ_ENABLE_AFF3CT
-  EXPECT_GT(codec->output_bits_per_frame(), codec->input_bits_per_frame());
-#else
-  EXPECT_EQ(codec->output_bits_per_frame(), 384);
+  EXPECT_EQ(codec->output_bits_per_frame(), 768);
 #endif
 }
 

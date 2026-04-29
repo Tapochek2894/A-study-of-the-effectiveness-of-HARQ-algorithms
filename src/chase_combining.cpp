@@ -14,7 +14,7 @@ struct candidate {
 
 
 std::vector<uint8_t> ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm ProbeAlgorithm,
-    const harq::HammingDecoder& decoder, std::vector<std::vector<double>> soft_bits) {
+    const harq::HammingDecoder& decoder, const std::vector<std::vector<double>>& soft_bits) {
 
     std::size_t n = soft_bits[0].size();
     std::vector<double> combined(n, 0.0);
@@ -23,7 +23,7 @@ std::vector<uint8_t> ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm ProbeAlgori
             combined[i] += transmission[i];
         }
     }
-    
+
     for (auto& i : combined) {
         i /= soft_bits.size();
     }
@@ -31,9 +31,10 @@ std::vector<uint8_t> ChaseCombiningHammingNoCRC(harq::ProbeAlgorithm ProbeAlgori
     return DecodeHammingCodesWithChase(combined, ProbeAlgorithm, decoder);
 }
 
-std::vector<uint8_t> ChaseCombiningConvNoCRC(harq::ProbeAlgorithm ProbeAlgorithm,
-    std::unique_ptr<fec::IFecCodec>& codec, std::vector<std::vector<double>> soft_bits, int d) {
-
+std::vector<uint8_t> ChaseCombiningConvNoCRC(
+    const std::unique_ptr<harq::fec::IFecCodec>& codec,
+    const std::vector<std::vector<double>>& soft_bits)
+{
     std::size_t n = soft_bits[0].size();
     std::vector<double> combined(n, 0.0);
     for (const auto& transmission : soft_bits) {
@@ -46,7 +47,7 @@ std::vector<uint8_t> ChaseCombiningConvNoCRC(harq::ProbeAlgorithm ProbeAlgorithm
         i /= soft_bits.size();
     }
 
-    return DecodeConvCodesWithChase(combined, ProbeAlgorithm, codec, d);
+    return codec->DecodeSoft(combined);
 }
 
 } // namespace harq
