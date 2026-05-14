@@ -138,3 +138,15 @@ add_executable(arq_chase_sim
 )
 
 target_link_libraries(arq_chase_sim PRIVATE harq)
+
+add_executable(bpsk_rayleigh_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/bpsk_rayleigh_sim.cpp
+)
+
+target_link_libraries(bpsk_rayleigh_sim PRIVATE harq)
+
+add_executable(qpsk_rayleigh_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/qpsk_rayleigh_sim.cpp
+)
+
+target_link_libraries(qpsk_rayleigh_sim PRIVATE harq)
