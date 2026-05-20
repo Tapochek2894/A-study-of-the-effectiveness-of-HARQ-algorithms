@@ -150,3 +150,9 @@ add_executable(qpsk_rayleigh_sim
 )
 
 target_link_libraries(qpsk_rayleigh_sim PRIVATE harq)
+
+add_executable(crc_undetected_sim
+    ${CMAKE_CURRENT_LIST_DIR}/../tools/crc_undetected_sim.cpp
+)
+
+target_link_libraries(crc_undetected_sim PRIVATE harq)
