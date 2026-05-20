@@ -5,6 +5,7 @@
 #include "rayleigh_channel.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -275,6 +276,10 @@ int main(int argc, char** argv) {
     std::size_t undetected_unc = 0, detected_unc = 0, correct_unc = 0;
     std::size_t undetected_cod = 0, detected_cod = 0, correct_cod = 0;
 
+    const auto t_start = std::chrono::steady_clock::now();
+    const std::size_t report_every = std::max<std::size_t>(1, options.blocks / 20);
+    std::cerr << "SNR " << snr_db << " dB: " << std::flush;
+
     for (std::size_t b = 0; b < options.blocks; ++b) {
       std::vector<uint8_t> message(k, 0);
       for (std::size_t i = 0; i < k; ++i) {
@@ -306,6 +311,10 @@ int main(int argc, char** argv) {
         else if (o.detected) ++detected_cod;
         else ++correct_cod;
       }
+
+      if ((b + 1) % report_every == 0) {
+        std::cerr << "." << std::flush;
+      }
     }
 
     const double total = static_cast<double>(options.blocks);
@@ -327,6 +336,24 @@ int main(int argc, char** argv) {
                 << "," << correct_cod;
     }
     std::cout << "," << options.blocks << "\n";
+    std::cout.flush();
+
+    const auto t_end = std::chrono::steady_clock::now();
+    const double secs =
+        std::chrono::duration<double>(t_end - t_start).count();
+    std::cerr << " done in " << std::fixed << std::setprecision(1)
+              << secs << "s";
+    if (need_uncoded) {
+      std::cerr << " | unc: und=" << undetected_unc
+                << " det=" << detected_unc
+                << " ok=" << correct_unc;
+    }
+    if (need_coded) {
+      std::cerr << " | cod: und=" << undetected_cod
+                << " det=" << detected_cod
+                << " ok=" << correct_cod;
+    }
+    std::cerr << "\n";
   }
 
   return 0;
