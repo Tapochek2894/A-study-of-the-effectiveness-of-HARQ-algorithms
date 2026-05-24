@@ -17,6 +17,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace {
 
 // 3GPP TS 38.212 / 36.212 §5.1.1:
@@ -30,17 +34,34 @@ const std::vector<uint8_t> kCrc24aPolynomial = {
 const std::vector<uint8_t> kCrc16Polynomial = {
     1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 
+// g_CRC8(D) = D^8 + D^2 + D + 1 (полином 0x07, CRC-8/CCITT, SMBus).
+const std::vector<uint8_t> kCrc8Polynomial = {
+    1, 0, 0, 0, 0, 0, 1, 1, 1};
+
+bool CrcPolynomialFor(const std::string& preset, std::vector<uint8_t>* out) {
+  if (preset == "24a") {
+    *out = kCrc24aPolynomial;
+  } else if (preset == "16") {
+    *out = kCrc16Polynomial;
+  } else if (preset == "8") {
+    *out = kCrc8Polynomial;
+  } else {
+    return false;
+  }
+  return true;
+}
+
 struct Options {
-  std::size_t blocks = 50000;
+  std::size_t blocks = 200000;
   uint32_t seed = 5489u;
   std::size_t info_bits = 512;
-  std::string crc_preset = "24a";  // 24a|16
-  std::vector<uint8_t> crc_polynomial = kCrc24aPolynomial;
+  std::vector<std::string> crc_presets = {"8", "16", "24a"};
   std::string mode = "both";  // uncoded|coded|both
-  int conv_rate_num = 1;
-  int conv_rate_den = 2;
-  std::string conv_decoder = "viterbi";  // viterbi|bcjr
-  int block_size = 1;
+  int cc_constraint_length = 7;
+  std::vector<unsigned> cc_generators = {0133u, 0171u, 0165u};  // rate 1/3
+  // 0 — auto (flat fading: block_size = длина фрейма каждого режима),
+  // 1 — fast fading, >1 — фиксированный размер блока когерентности.
+  int block_size = 0;
   std::vector<double> snr_list = {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20};
   bool use_range = false;
   double snr_start = 0.0;
@@ -52,16 +73,15 @@ void PrintUsage(const char* argv0) {
   std::cout
       << "Usage: " << argv0
       << " [--blocks <count>] [--seed <seed>] [--info-bits <k>]"
-      << " [--crc <24a|16>] [--mode <uncoded|coded|both>]"
-      << " [--conv-rate <num/den>] [--conv-decoder <viterbi|bcjr>]"
-      << " [--block-size <symbols>]"
+      << " [--crc <list, e.g. 8,16,24a>] [--mode <uncoded|coded|both>]"
+      << " [--cc-gens <octal list, e.g. 133,171,165>] [--cc-K <constraint>]"
+      << " [--block-size <symbols|auto>]"
       << " [--snr <dB1,dB2,...>]"
       << " [--snr-start <dB> --snr-end <dB> --snr-points <n>]\n"
-      << "\nMetrics per SNR (CSV):\n"
-      << "  uncoded:  p_undetected_unc, p_detected_unc, p_correct_unc\n"
-      << "  coded:    p_undetected_cod, p_detected_cod, p_correct_cod\n"
-      << "Modes: uncoded — только без свёрточного кода; coded — только с ним;\n"
-      << "       both (по умолчанию) — обе кривые в одном CSV.\n";
+      << "\nLong-format CSV: одна строка на (crc, mode, snr).\n"
+      << "Метрика P_undetected: CRC прошёл, но информационная часть искажена.\n"
+      << "Коды́рование — нативный несистематический свёрточный код (по\n"
+      << "умолчанию 1/3, (133,171,165)_8, K=7) с декодером Витерби.\n";
 }
 
 bool ParseSnrList(const std::string& value, std::vector<double>* out) {
@@ -80,6 +100,32 @@ bool ParseSnrList(const std::string& value, std::vector<double>* out) {
   return true;
 }
 
+bool ParseStringList(const std::string& value, std::vector<std::string>* out) {
+  std::vector<std::string> parsed;
+  std::stringstream ss(value);
+  std::string token;
+  while (std::getline(ss, token, ',')) {
+    if (token.empty()) return false;
+    parsed.push_back(token);
+  }
+  if (parsed.empty()) return false;
+  *out = std::move(parsed);
+  return true;
+}
+
+bool ParseOctalList(const std::string& value, std::vector<unsigned>* out) {
+  std::vector<unsigned> parsed;
+  std::stringstream ss(value);
+  std::string token;
+  while (std::getline(ss, token, ',')) {
+    if (token.empty()) return false;
+    parsed.push_back(static_cast<unsigned>(std::stoul(token, nullptr, 8)));
+  }
+  if (parsed.size() < 2) return false;
+  *out = std::move(parsed);
+  return true;
+}
+
 bool ParseArgs(int argc, char** argv, Options* options) {
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
@@ -90,14 +136,13 @@ bool ParseArgs(int argc, char** argv, Options* options) {
     } else if (arg == "--info-bits" && i + 1 < argc) {
       options->info_bits = static_cast<std::size_t>(std::stoull(argv[++i]));
     } else if (arg == "--crc" && i + 1 < argc) {
-      options->crc_preset = argv[++i];
-      if (options->crc_preset == "24a") {
-        options->crc_polynomial = kCrc24aPolynomial;
-      } else if (options->crc_preset == "16") {
-        options->crc_polynomial = kCrc16Polynomial;
-      } else {
-        std::cerr << "Unsupported --crc value: " << options->crc_preset << "\n";
-        return false;
+      if (!ParseStringList(argv[++i], &options->crc_presets)) return false;
+      for (const auto& p : options->crc_presets) {
+        std::vector<uint8_t> dummy;
+        if (!CrcPolynomialFor(p, &dummy)) {
+          std::cerr << "Unsupported --crc value: " << p << " (use 8|16|24a)\n";
+          return false;
+        }
       }
     } else if (arg == "--mode" && i + 1 < argc) {
       options->mode = argv[++i];
@@ -106,16 +151,20 @@ bool ParseArgs(int argc, char** argv, Options* options) {
         std::cerr << "Invalid --mode value.\n";
         return false;
       }
-    } else if (arg == "--conv-rate" && i + 1 < argc) {
-      const std::string rate = argv[++i];
-      const std::size_t slash = rate.find('/');
-      if (slash == std::string::npos) return false;
-      options->conv_rate_num = std::stoi(rate.substr(0, slash));
-      options->conv_rate_den = std::stoi(rate.substr(slash + 1));
-    } else if (arg == "--conv-decoder" && i + 1 < argc) {
-      options->conv_decoder = argv[++i];
+    } else if (arg == "--cc-gens" && i + 1 < argc) {
+      if (!ParseOctalList(argv[++i], &options->cc_generators)) {
+        std::cerr << "Invalid --cc-gens (need >= 2 octal values).\n";
+        return false;
+      }
+    } else if (arg == "--cc-K" && i + 1 < argc) {
+      options->cc_constraint_length = std::stoi(argv[++i]);
     } else if (arg == "--block-size" && i + 1 < argc) {
-      options->block_size = std::stoi(argv[++i]);
+      const std::string value = argv[++i];
+      if (value == "auto") {
+        options->block_size = 0;
+      } else {
+        options->block_size = std::stoi(value);
+      }
     } else if (arg == "--snr" && i + 1 < argc) {
       if (!ParseSnrList(argv[++i], &options->snr_list)) return false;
       options->use_range = false;
@@ -166,6 +215,12 @@ BlockOutcome ClassifyBlock(const harq::Crc& crc,
   return o;
 }
 
+// Одна расчётная единица: пара (CRC-пресет, SNR).
+struct Job {
+  std::size_t crc_idx;
+  double snr_db;
+};
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -182,8 +237,8 @@ int main(int argc, char** argv) {
     std::cerr << "info-bits must be positive.\n";
     return 1;
   }
-  if (options.block_size < 1) {
-    std::cerr << "block-size must be >= 1.\n";
+  if (options.block_size < 0) {
+    std::cerr << "block-size must be >= 1 or 'auto'.\n";
     return 1;
   }
   if (options.use_range) {
@@ -194,11 +249,6 @@ int main(int argc, char** argv) {
   }
   const bool need_coded = options.mode == "coded" || options.mode == "both";
   const bool need_uncoded = options.mode == "uncoded" || options.mode == "both";
-
-  if (need_coded && !harq::fec::IsConvolutionalAff3ctAvailable()) {
-    std::cerr << "AFF3CT backend is unavailable. Rebuild with ENABLE_AFF3CT=ON.\n";
-    return 1;
-  }
 
   std::vector<double> snr_values = options.snr_list;
   if (options.use_range) {
@@ -211,74 +261,126 @@ int main(int argc, char** argv) {
     }
   }
 
-  harq::Crc crc(options.crc_polynomial);
-  const int r = crc.r();
   const std::size_t k = options.info_bits;
-  const std::size_t n_crc = k + static_cast<std::size_t>(r);
 
-  std::unique_ptr<harq::fec::IFecCodec> conv_codec;
+  // Предрасчёт по каждому CRC: полином, r, n_crc, n_coded.
+  struct CrcInfo {
+    std::string preset;
+    std::vector<uint8_t> polynomial;
+    int r = 0;
+    std::size_t n_crc = 0;
+    int n_coded = 0;
+  };
+  std::vector<CrcInfo> crc_infos;
+  for (const auto& preset : options.crc_presets) {
+    CrcInfo info;
+    info.preset = preset;
+    CrcPolynomialFor(preset, &info.polynomial);
+    harq::Crc crc(info.polynomial);
+    info.r = crc.r();
+    info.n_crc = k + static_cast<std::size_t>(info.r);
+
+    if (need_coded) {
+      harq::fec::FecConfig cfg{};
+      cfg.codec_type = harq::fec::CodecType::kConvolutionalCc;
+      cfg.cc_input_bits_per_frame = static_cast<int>(info.n_crc);
+      cfg.cc_constraint_length = options.cc_constraint_length;
+      cfg.cc_generators_octal = options.cc_generators;
+      auto probe = harq::fec::CreateCodec(cfg);
+      info.n_coded = probe->output_bits_per_frame();
+    }
+    crc_infos.push_back(std::move(info));
+  }
+
+  // Шапка прогона в stderr.
+  std::ostringstream gens;
+  for (std::size_t i = 0; i < options.cc_generators.size(); ++i) {
+    if (i) gens << ",";
+    gens << std::oct << options.cc_generators[i] << std::dec;
+  }
+  std::cerr << "CRC presets:";
+  for (const auto& info : crc_infos) {
+    std::cerr << " " << info.preset << "(r=" << info.r
+              << ",n_crc=" << info.n_crc;
+    if (need_coded) std::cerr << ",n_cod=" << info.n_coded;
+    std::cerr << ")";
+  }
+  std::cerr << "\n";
   if (need_coded) {
-    harq::fec::FecConfig fec_config{};
-    fec_config.codec_type = harq::fec::CodecType::kConvolutionalAff3ct;
-    fec_config.conv_input_bits_per_frame = static_cast<int>(n_crc);
-    fec_config.conv_rate_num = options.conv_rate_num;
-    fec_config.conv_rate_den = options.conv_rate_den;
-    fec_config.conv_decoder =
-        options.conv_decoder == "bcjr" ? harq::fec::ConvDecoderType::kBcjr
-                                        : harq::fec::ConvDecoderType::kViterbi;
-    conv_codec = harq::fec::CreateCodec(fec_config);
-    if (static_cast<std::size_t>(conv_codec->input_bits_per_frame()) != n_crc) {
-      std::cerr << "AFF3CT changed frame size; expected " << n_crc << ", got "
-                << conv_codec->input_bits_per_frame() << ".\n";
-      return 1;
+    std::cerr << "Conv (native CC): rate=1/" << options.cc_generators.size()
+              << ", K=" << options.cc_constraint_length
+              << ", gens(oct)=" << gens.str() << ", decoder=viterbi(soft)\n";
+  }
+  std::cerr << "Channel: BPSK + Rayleigh, block_size=";
+  if (options.block_size == 0) {
+    std::cerr << "auto(flat per frame)";
+  } else {
+    std::cerr << options.block_size;
+  }
+  std::cerr << ", k=" << k << ", blocks/point=" << options.blocks;
+#ifdef _OPENMP
+  std::cerr << " | OpenMP threads=" << omp_get_max_threads();
+#endif
+  std::cerr << "\n";
+
+  // CSV (long format).
+  std::cout << "crc,r,mode,snr_db,p_undetected,p_detected,p_correct,"
+               "n_undetected,n_detected,n_correct,total_blocks\n";
+  std::cout.flush();
+
+  // Список заданий: декартово произведение (CRC × SNR).
+  std::vector<Job> jobs;
+  for (std::size_t c = 0; c < crc_infos.size(); ++c) {
+    for (double snr : snr_values) {
+      jobs.push_back(Job{c, snr});
     }
   }
-  const int n_coded = conv_codec ? conv_codec->output_bits_per_frame() : 0;
+  const int n_jobs = static_cast<int>(jobs.size());
 
-  std::cerr << "CRC: preset=" << options.crc_preset
-            << ", r=" << r << ", k=" << k << ", n_crc=" << n_crc << "\n";
-  if (need_coded) {
-    std::cerr << "Conv: rate=" << options.conv_rate_num << "/"
-              << options.conv_rate_den
-              << ", decoder=" << options.conv_decoder
-              << ", N_frame=" << n_coded << "\n";
-  }
-  std::cerr << "Channel: BPSK + Rayleigh, block_size=" << options.block_size
-            << ", blocks/SNR=" << options.blocks << "\n";
-
-  std::cout << "snr_db";
-  if (need_uncoded) {
-    std::cout << ",p_undetected_unc,p_detected_unc,p_correct_unc"
-              << ",undetected_unc,detected_unc,correct_unc";
-  }
-  if (need_coded) {
-    std::cout << ",p_undetected_cod,p_detected_cod,p_correct_cod"
-              << ",undetected_cod,detected_cod,correct_cod";
-  }
-  std::cout << ",total_blocks\n";
-  std::cout << std::setprecision(10) << std::scientific;
-
-  std::mt19937 rng(options.seed);
-  std::uniform_int_distribution<int> bit_dist(0, 1);
-  harq::BpskModulator modulator;
-  harq::BpskDemodulator demodulator;
-
-  for (std::size_t idx = 0; idx < snr_values.size(); ++idx) {
-    const double snr_db = snr_values[idx];
+  // Каждый поток получает свой codec, RNG, канал и буферы.
+#pragma omp parallel for schedule(dynamic, 1)
+  for (int jx = 0; jx < n_jobs; ++jx) {
+    const Job job = jobs[static_cast<std::size_t>(jx)];
+    const CrcInfo& ci = crc_infos[job.crc_idx];
+    const double snr_db = job.snr_db;
     if (!std::isfinite(snr_db)) {
+#pragma omp critical(crc_undetected_log)
       std::cerr << "Invalid SNR value: " << snr_db << "\n";
-      return 1;
+      continue;
     }
-    harq::RayleighChannel channel(
-        snr_db, static_cast<uint32_t>(options.seed + idx + 1),
-        options.block_size);
 
-    std::size_t undetected_unc = 0, detected_unc = 0, correct_unc = 0;
-    std::size_t undetected_cod = 0, detected_cod = 0, correct_cod = 0;
+    harq::Crc crc(ci.polynomial);
+
+    std::unique_ptr<harq::fec::IFecCodec> local_codec;
+    if (need_coded) {
+      harq::fec::FecConfig cfg{};
+      cfg.codec_type = harq::fec::CodecType::kConvolutionalCc;
+      cfg.cc_input_bits_per_frame = static_cast<int>(ci.n_crc);
+      cfg.cc_constraint_length = options.cc_constraint_length;
+      cfg.cc_generators_octal = options.cc_generators;
+      local_codec = harq::fec::CreateCodec(cfg);
+    }
+
+    harq::BpskModulator modulator;
+    harq::BpskDemodulator demodulator;
+    const int unc_block = options.block_size == 0
+                              ? static_cast<int>(ci.n_crc)
+                              : options.block_size;
+    const int cod_block = options.block_size == 0
+                              ? ci.n_coded
+                              : options.block_size;
+    harq::RayleighChannel channel(
+        snr_db,
+        static_cast<uint32_t>(options.seed + static_cast<uint32_t>(jx) + 1u),
+        unc_block > 0 ? unc_block : 1);
+    std::mt19937 rng(options.seed +
+                     static_cast<uint32_t>(jx) * 0x9E3779B9u);
+    std::uniform_int_distribution<int> bit_dist(0, 1);
+
+    std::size_t und_unc = 0, det_unc = 0, ok_unc = 0;
+    std::size_t und_cod = 0, det_cod = 0, ok_cod = 0;
 
     const auto t_start = std::chrono::steady_clock::now();
-    const std::size_t report_every = std::max<std::size_t>(1, options.blocks / 20);
-    std::cerr << "SNR " << snr_db << " dB: " << std::flush;
 
     for (std::size_t b = 0; b < options.blocks; ++b) {
       std::vector<uint8_t> message(k, 0);
@@ -288,72 +390,67 @@ int main(int argc, char** argv) {
       std::vector<uint8_t> crc_codeword = crc.Encode(message);
 
       if (need_uncoded) {
+        if (channel.block_size() != unc_block) {
+          channel.SetBlockSize(unc_block);
+        }
         std::vector<double> symbols = modulator.Modulate(crc_codeword);
         std::vector<double> received = channel.AddNoise(symbols);
-        // Когерентный приём с известным μ: знак μ·r = знак r,
-        // поэтому жёсткое решение по знаку r остаётся корректным.
         std::vector<uint8_t> hard = demodulator.Demodulate(received);
         BlockOutcome o = ClassifyBlock(crc, message, hard);
-        if (o.undetected) ++undetected_unc;
-        else if (o.detected) ++detected_unc;
-        else ++correct_unc;
+        if (o.undetected) ++und_unc;
+        else if (o.detected) ++det_unc;
+        else ++ok_unc;
       }
 
       if (need_coded) {
-        std::vector<uint8_t> conv_encoded = conv_codec->Encode(crc_codeword);
+        if (channel.block_size() != cod_block) {
+          channel.SetBlockSize(cod_block);
+        }
+        std::vector<uint8_t> conv_encoded = local_codec->Encode(crc_codeword);
         std::vector<double> symbols = modulator.Modulate(conv_encoded);
         std::vector<double> received = channel.AddNoise(symbols);
         std::vector<double> llr =
             channel.ComputeLlr(received, channel.last_fading_amplitudes());
-        std::vector<uint8_t> decoded_codeword = conv_codec->DecodeSoft(llr);
+        std::vector<uint8_t> decoded_codeword = local_codec->DecodeSoft(llr);
         BlockOutcome o = ClassifyBlock(crc, message, decoded_codeword);
-        if (o.undetected) ++undetected_cod;
-        else if (o.detected) ++detected_cod;
-        else ++correct_cod;
-      }
-
-      if ((b + 1) % report_every == 0) {
-        std::cerr << "." << std::flush;
+        if (o.undetected) ++und_cod;
+        else if (o.detected) ++det_cod;
+        else ++ok_cod;
       }
     }
 
     const double total = static_cast<double>(options.blocks);
-    std::cout << snr_db;
-    if (need_uncoded) {
-      std::cout << "," << undetected_unc / total
-                << "," << detected_unc / total
-                << "," << correct_unc / total
-                << "," << undetected_unc
-                << "," << detected_unc
-                << "," << correct_unc;
-    }
-    if (need_coded) {
-      std::cout << "," << undetected_cod / total
-                << "," << detected_cod / total
-                << "," << correct_cod / total
-                << "," << undetected_cod
-                << "," << detected_cod
-                << "," << correct_cod;
-    }
-    std::cout << "," << options.blocks << "\n";
-    std::cout.flush();
+    auto format_row = [&](const char* mode_name, std::size_t und,
+                          std::size_t det, std::size_t ok) {
+      std::ostringstream row;
+      row << ci.preset << "," << ci.r << "," << mode_name << ","
+          << std::setprecision(10) << std::scientific << snr_db << ","
+          << und / total << "," << det / total << "," << ok / total << ","
+          << und << "," << det << "," << ok << "," << options.blocks << "\n";
+      return row.str();
+    };
+
+    std::string out_rows;
+    if (need_uncoded) out_rows += format_row("uncoded", und_unc, det_unc, ok_unc);
+    if (need_coded) out_rows += format_row("coded", und_cod, det_cod, ok_cod);
 
     const auto t_end = std::chrono::steady_clock::now();
-    const double secs =
-        std::chrono::duration<double>(t_end - t_start).count();
-    std::cerr << " done in " << std::fixed << std::setprecision(1)
-              << secs << "s";
-    if (need_uncoded) {
-      std::cerr << " | unc: und=" << undetected_unc
-                << " det=" << detected_unc
-                << " ok=" << correct_unc;
+    const double secs = std::chrono::duration<double>(t_end - t_start).count();
+
+#pragma omp critical(crc_undetected_log)
+    {
+      std::cerr << "CRC " << ci.preset << " @ " << std::fixed
+                << std::setprecision(1) << snr_db << " dB done in " << secs
+                << "s";
+      if (need_uncoded)
+        std::cerr << " | unc und=" << und_unc << " det=" << det_unc;
+      if (need_coded)
+        std::cerr << " | cod und=" << und_cod << " det=" << det_cod;
+      std::cerr << "\n";
+      // Стримим сразу, чтобы при Ctrl+C не потерять посчитанное.
+      std::cout << out_rows;
+      std::cout.flush();
     }
-    if (need_coded) {
-      std::cerr << " | cod: und=" << undetected_cod
-                << " det=" << detected_cod
-                << " ok=" << correct_cod;
-    }
-    std::cerr << "\n";
   }
 
   return 0;

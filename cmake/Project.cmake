@@ -156,3 +156,8 @@ add_executable(crc_undetected_sim
 )
 
 target_link_libraries(crc_undetected_sim PRIVATE harq)
+
+find_package(OpenMP QUIET)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(crc_undetected_sim PRIVATE OpenMP::OpenMP_CXX)
+endif()

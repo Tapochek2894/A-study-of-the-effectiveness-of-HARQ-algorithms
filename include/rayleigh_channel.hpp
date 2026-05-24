@@ -2,6 +2,7 @@
 
 #include <complex>
 #include <cstdint>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -60,6 +61,7 @@ class RayleighChannel {
   double sigma_;
   uint32_t seed_;
   int block_size_;
+  std::mt19937 rng_;
   std::vector<double> last_fading_;
 };
 

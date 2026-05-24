@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""Plot P_undetected vs SNR from CSV produced by crc_undetected_sim."""
+"""Plot CRC error probability vs SNR from the long-format CSV of crc_undetected_sim.
+
+CSV columns: crc,r,mode,snr_db,p_undetected,p_detected,p_correct,
+             n_undetected,n_detected,n_correct,total_blocks
+
+По умолчанию строится P_undetected (вероятность НЕ обнаружить ошибку) для всех
+CRC и режимов на одном графике. Несколько CRC сравниваются цветом, режимы
+(uncoded/coded) — стилем линии.
+"""
 
 import argparse
 import csv
+from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
@@ -10,65 +19,60 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-COLUMNS_UNC = ("p_undetected_unc", "p_detected_unc", "p_correct_unc")
-COLUMNS_COD = ("p_undetected_cod", "p_detected_cod", "p_correct_cod")
+CRC_COLORS = {
+    "8": "tab:red",
+    "16": "tab:green",
+    "24a": "tab:blue",
+}
+MODE_STYLE = {
+    "uncoded": dict(linestyle="--", marker="v"),
+    "coded": dict(linestyle="-", marker="o"),
+}
 
 
 def load_csv(path: Path):
-    data = {"snr_db": []}
+    # groups[(crc, mode)] -> list of (snr_db, value, r)
+    rows = []
     with path.open(newline="") as f:
         reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames or []
-        for name in fieldnames:
-            if name == "snr_db":
-                continue
-            data[name] = []
         for row in reader:
-            if not row:
+            if not row or "crc" not in row:
                 continue
-            data["snr_db"].append(float(row["snr_db"]))
-            for key in data:
-                if key == "snr_db":
-                    continue
-                value = row.get(key, "")
-                data[key].append(float(value) if value not in ("", None) else None)
-    return data
+            rows.append(row)
+    return rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Plot P_undetected (CRC) vs SNR for uncoded and conv-coded BPSK/Rayleigh."
+        description="Plot CRC undetected/detected probability vs SNR "
+        "(long-format CSV from crc_undetected_sim)."
     )
     parser.add_argument("csv_path", help="Path to CSV file from crc_undetected_sim")
+    parser.add_argument("--out", default=None, help="Output image path")
+    parser.add_argument("--title", default=None, help="Plot title")
     parser.add_argument(
-        "--out",
-        help="Output image path (default: <csv_name>_plot.png)",
-        default=None,
+        "--metric",
+        choices=("undetected", "detected", "correct"),
+        default="undetected",
+        help="Which probability to plot (default undetected).",
     )
     parser.add_argument(
-        "--title",
-        default="P(undetected CRC error) vs SNR, BPSK + Rayleigh",
-        help="Plot title",
-    )
-    parser.add_argument(
-        "--with-detected",
-        action="store_true",
-        help="Also draw P_detected curves (CRC fail rate)",
+        "--modes",
+        default="uncoded,coded",
+        help="Comma list of modes to draw (default 'uncoded,coded').",
     )
     parser.add_argument(
         "--floor",
         type=float,
-        default=1e-7,
-        help="Floor value substituted for zero counts on log scale (default 1e-7)",
+        default=1e-9,
+        help="Floor for zero values on log scale / lower y-limit (default 1e-9).",
+    )
+    parser.add_argument(
+        "--no-ceilings",
+        action="store_true",
+        help="Do not draw 2^-r CRC undetected ceilings.",
     )
     return parser.parse_args()
-
-
-def _series(data, key, floor):
-    raw = data.get(key)
-    if raw is None:
-        return None
-    return [v if (v is not None and v > 0) else floor for v in raw]
 
 
 def main():
@@ -77,40 +81,72 @@ def main():
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
 
-    data = load_csv(csv_path)
-    if not data["snr_db"]:
+    rows = load_csv(csv_path)
+    if not rows:
         raise SystemExit("No data found in CSV file.")
 
-    snr = data["snr_db"]
+    wanted_modes = [m for m in args.modes.split(",") if m]
+    col = f"p_{args.metric}"
+
+    # groups[(crc, mode)] -> dict(snr -> value), and crc -> r
+    groups = defaultdict(dict)
+    crc_r = {}
+    crc_order = []
+    for row in rows:
+        crc = row["crc"]
+        mode = row["mode"]
+        if mode not in wanted_modes:
+            continue
+        if crc not in crc_r:
+            crc_r[crc] = int(row["r"])
+            crc_order.append(crc)
+        groups[(crc, mode)][float(row["snr_db"])] = float(row[col])
+
+    if not groups:
+        raise SystemExit("No matching (crc, mode) series to plot.")
+
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    p_und_unc = _series(data, "p_undetected_unc", args.floor)
-    p_und_cod = _series(data, "p_undetected_cod", args.floor)
-    if p_und_unc is not None:
-        ax.semilogy(snr, p_und_unc, "o-", color="tab:red",
-                    label="P_undetected, без кодирования", markersize=5)
-    if p_und_cod is not None:
-        ax.semilogy(snr, p_und_cod, "s-", color="tab:blue",
-                    label="P_undetected, conv 1/2 Viterbi", markersize=5)
+    for crc in crc_order:
+        color = CRC_COLORS.get(crc, None)
+        for mode in wanted_modes:
+            series = groups.get((crc, mode))
+            if not series:
+                continue
+            snr = sorted(series)
+            vals = [series[s] if series[s] > 0 else args.floor for s in snr]
+            style = MODE_STYLE.get(mode, dict(linestyle="-", marker="o"))
+            ax.semilogy(
+                snr, vals, color=color, markersize=5,
+                label=f"CRC-{crc.upper()}, {mode}", **style,
+            )
 
-    if args.with_detected:
-        p_det_unc = _series(data, "p_detected_unc", args.floor)
-        p_det_cod = _series(data, "p_detected_cod", args.floor)
-        if p_det_unc is not None:
-            ax.semilogy(snr, p_det_unc, "v--", color="tab:orange", alpha=0.7,
-                        label="P_detected, без кодирования", markersize=4)
-        if p_det_cod is not None:
-            ax.semilogy(snr, p_det_cod, "^--", color="tab:cyan", alpha=0.7,
-                        label="P_detected, conv 1/2 Viterbi", markersize=4)
+    # Горизонтальные ориентиры 2^-r (потолок необнаружения каждого CRC).
+    if args.metric == "undetected" and not args.no_ceilings:
+        for crc in crc_order:
+            ceil = 2.0 ** (-crc_r[crc])
+            if ceil >= args.floor:
+                ax.axhline(ceil, color=CRC_COLORS.get(crc, "gray"),
+                           linestyle=":", linewidth=0.9, alpha=0.5)
+                ax.text(ax.get_xlim()[1], ceil, f" 2^-{crc_r[crc]}",
+                        va="center", ha="left", fontsize=7,
+                        color=CRC_COLORS.get(crc, "gray"))
 
+    titles = {
+        "undetected": "Вероятность НЕ обнаружить ошибку (P_undetected) vs SNR\n"
+                      "BPSK + Rayleigh, conv 1/3 Viterbi, k=512",
+        "detected": "P(CRC detected) vs SNR, BPSK + Rayleigh, k=512",
+        "correct": "P(correct) vs SNR, BPSK + Rayleigh, k=512",
+    }
     ax.set_xlabel("SNR, dB")
-    ax.set_ylabel("Probability")
-    ax.set_title(args.title)
+    ax.set_ylabel(f"P_{args.metric}")
+    ax.set_title(args.title or titles[args.metric])
+    ax.set_ylim(bottom=args.floor)
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
     ax.legend(loc="best", fontsize=9)
 
     out_path = Path(args.out) if args.out else csv_path.with_name(
-        csv_path.stem + "_plot.png"
+        csv_path.stem + f"_{args.metric}.png"
     )
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
