@@ -1,47 +1,18 @@
-CRC presets: 3(r=3,n_crc=515,n_cod=1563) 8(r=8,n_crc=520,n_cod=1578) 16(r=16,n_crc=528,n_cod=1602) 24a(r=24,n_crc=536,n_cod=1626)
+CRC presets: 3(r=3,n_crc=515,n_cod=1563) 8(r=8,n_crc=520,n_cod=1578) 16(r=16,n_crc=528,n_cod=1602)
 Conv (native CC): rate=1/3, K=7, gens(oct)=133,171,165, decoder=viterbi(soft)
-Channel: BPSK + Rayleigh, block_size=auto(flat per frame), k=512, blocks/point=100000 | OpenMP threads=16
-CRC 3 @ 20.0 dB done in 119.5s | unc und=471 det=4174 | cod und=51 det=418
-CRC 3 @ 14.0 dB done in 120.6s | unc und=1673 det=15341 | cod und=223 det=1564
-CRC 3 @ 16.0 dB done in 121.3s | unc und=1151 det=9850 | cod und=141 det=982
-CRC 3 @ 8.0 dB done in 121.5s | unc und=5666 det=45901 | cod und=877 det=6139
-CRC 3 @ 18.0 dB done in 121.6s | unc und=756 det=6422 | cod und=97 det=647
-CRC 3 @ 10.0 dB done in 122.0s | unc und=3874 det=32917 | cod und=543 det=3913
-CRC 3 @ 12.0 dB done in 122.9s | unc und=2670 det=22785 | cod und=301 det=2546
-CRC 3 @ 4.0 dB done in 123.1s | unc und=9500 det=73490 | cod und=2064 det=14691
-CRC 3 @ 6.0 dB done in 123.3s | unc und=7676 det=60344 | cod und=1345 det=9589
-CRC 8 @ 8.0 dB done in 124.4s | unc und=157 det=51932 | cod und=23 det=7045
-CRC 8 @ 6.0 dB done in 124.6s | unc und=232 det=67866 | cod und=35 det=10957
-CRC 3 @ 0.0 dB done in 124.9s | unc und=12281 det=86256 | cod und=4536 det=32209
-CRC 8 @ 2.0 dB done in 125.2s | unc und=358 det=93372 | cod und=84 det=24805
-CRC 3 @ 2.0 dB done in 125.2s | unc und=11344 det=82205 | cod und=3109 det=22089
-CRC 8 @ 4.0 dB done in 125.6s | unc und=291 det=82800 | cod und=55 det=16403
-CRC 8 @ 0.0 dB done in 125.9s | unc und=348 det=98172 | cod und=129 det=36696
-CRC 8 @ 18.0 dB done in 123.4s | unc und=20 det=7145 | cod und=1 det=702
-CRC 8 @ 10.0 dB done in 125.7s | unc und=129 det=36886 | cod und=15 det=4540
-CRC 8 @ 12.0 dB done in 125.0s | unc und=74 det=25332 | cod und=13 det=2810
-CRC 8 @ 14.0 dB done in 124.6s | unc und=57 det=16976 | cod und=5 det=1824
-CRC 8 @ 20.0 dB done in 123.9s | unc und=13 det=4631 | cod und=2 det=470
-CRC 8 @ 16.0 dB done in 124.5s | unc und=31 det=10997 | cod und=0 det=1176
-CRC 16 @ 18.0 dB done in 125.1s | unc und=0 det=7208 | cod und=0 det=761
-CRC 16 @ 16.0 dB done in 126.2s | unc und=0 det=11183 | cod und=0 det=1132
-CRC 16 @ 10.0 dB done in 127.1s | unc und=1 det=37420 | cod und=0 det=4437
-CRC 16 @ 12.0 dB done in 127.4s | unc und=2 det=25356 | cod und=0 det=2886
-CRC 16 @ 14.0 dB done in 127.4s | unc und=0 det=17103 | cod und=0 det=1836
-CRC 16 @ 8.0 dB done in 128.3s | unc und=1 det=51939 | cod und=0 det=7131
-CRC 16 @ 2.0 dB done in 130.3s | unc und=1 det=93656 | cod und=1 det=25211
-CRC 16 @ 4.0 dB done in 130.3s | unc und=3 det=83230 | cod und=2 det=16915
-CRC 16 @ 0.0 dB done in 131.1s | unc und=2 det=98555 | cod und=0 det=36756
-CRC 16 @ 6.0 dB done in 130.0s | unc und=1 det=68303 | cod und=0 det=11024
-CRC 16 @ 20.0 dB done in 82.7s | unc und=0 det=4622 | cod und=0 det=427
-CRC 24a @ 12.0 dB done in 84.2s | unc und=0 det=25928 | cod und=0 det=2928
-CRC 24a @ 18.0 dB done in 92.6s | unc und=0 det=7376 | cod und=0 det=765
-CRC 24a @ 20.0 dB done in 99.0s | unc und=0 det=4534 | cod und=0 det=450
-CRC 24a @ 4.0 dB done in 107.1s | unc und=0 det=83348 | cod und=0 det=16586
-CRC 24a @ 0.0 dB done in 109.9s | unc und=0 det=98561 | cod und=0 det=36958
-CRC 24a @ 10.0 dB done in 104.7s | unc und=0 det=37398 | cod und=0 det=4414
-CRC 24a @ 8.0 dB done in 110.3s | unc und=0 det=52105 | cod und=0 det=7040
-CRC 24a @ 6.0 dB done in 112.1s | unc und=0 det=68488 | cod und=0 det=10917
-CRC 24a @ 2.0 dB done in 115.7s | unc und=0 det=93680 | cod und=0 det=25016
-CRC 24a @ 14.0 dB done in 110.2s | unc und=0 det=16897 | cod und=0 det=1818
-CRC 24a @ 16.0 dB done in 109.6s | unc und=0 det=11214 | cod und=0 det=1147
+Channel: BPSK + Rayleigh, block_size=auto(flat per frame), k=512, blocks/point=3000000 | OpenMP threads=16
+CRC 3 @ 12.0 dB done in 2935.7s | unc und=80382 det=683352 | cod und=10584 det=74506
+CRC 3 @ 9.0 dB done in 2981.4s | unc und=143092 det=1180406 | cod und=20777 det=147526
+CRC 8 @ 12.0 dB done in 2994.6s | unc und=2560 det=762883 | cod und=337 det=85248
+CRC 8 @ 9.0 dB done in 3011.5s | unc und=4406 det=1320218 | cod und=576 det=167644
+CRC 16 @ 12.0 dB done in 3015.8s | unc und=7 det=768758 | cod und=0 det=85558
+CRC 3 @ 0.0 dB done in 3032.4s | unc und=364638 det=2590870 | cod und=135550 det=960937
+CRC 3 @ 6.0 dB done in 3038.1s | unc und=229142 det=1813317 | cod und=40291 det=285485
+CRC 16 @ 9.0 dB done in 3048.2s | unc und=19 det=1327827 | cod und=2 det=168412
+CRC 8 @ 3.0 dB done in 3048.8s | unc und=9815 det=2665246 | cod und=2173 det=612756
+CRC 3 @ 3.0 dB done in 3057.7s | unc und=316676 det=2356019 | cod und=76118 det=538456
+CRC 16 @ 6.0 dB done in 3064.1s | unc und=27 det=2047629 | cod und=3 det=325576
+CRC 8 @ 6.0 dB done in 3070.9s | unc und=7243 det=2038041 | cod und=1251 det=324671
+CRC 8 @ 0.0 dB done in 3093.6s | unc und=11535 det=2944664 | cod und=3951 det=1093370
+CRC 16 @ 3.0 dB done in 3108.8s | unc und=38 det=2676148 | cod und=10 det=614897
+CRC 16 @ 0.0 dB done in 3112.4s | unc und=43 det=2956550 | cod und=17 det=1100894

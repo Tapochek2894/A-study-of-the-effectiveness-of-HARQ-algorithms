@@ -60,7 +60,7 @@ struct Options {
   std::size_t blocks = 200000;
   uint32_t seed = 5489u;
   std::size_t info_bits = 512;
-  std::vector<std::string> crc_presets = {"3", "8", "16", "24a"};
+  std::vector<std::string> crc_presets = {"3", "8", "16"};
   std::string mode = "both";  // uncoded|coded|both
   int cc_constraint_length = 7;
   std::vector<unsigned> cc_generators = {0133u, 0171u, 0165u};  // rate 1/3
@@ -78,7 +78,7 @@ void PrintUsage(const char* argv0) {
   std::cout
       << "Usage: " << argv0
       << " [--blocks <count>] [--seed <seed>] [--info-bits <k>]"
-      << " [--crc <list, e.g. 3,8,16,24a>] [--mode <uncoded|coded|both>]"
+      << " [--crc <list, e.g. 3,8,16>] [--mode <uncoded|coded|both>]"
       << " [--cc-gens <octal list, e.g. 133,171,165>] [--cc-K <constraint>]"
       << " [--block-size <symbols|auto>]"
       << " [--snr <dB1,dB2,...>]"
