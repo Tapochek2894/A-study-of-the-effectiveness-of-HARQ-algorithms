@@ -161,10 +161,11 @@ def main():
 
     ax.set_xlabel("SNR, dB")
     ax.set_ylabel("P_undetected")
+    suffix = ("(модель P_frame·2⁻ʳ + Monte-Carlo)" if show_analytic
+              else "(прямой Monte-Carlo)")
     default_title = (
         "Вероятность НЕ обнаружить ошибку (P_undetected) vs SNR\n"
-        "BPSK + Rayleigh, conv 1/3 Viterbi, k=512  "
-        "(модель P_frame·2⁻ʳ + Monte-Carlo)"
+        f"BPSK + Rayleigh, conv 1/3 Viterbi, k=512  {suffix}"
     )
     ax.set_title(args.title or default_title)
     ax.set_ylim(bottom=args.floor)
