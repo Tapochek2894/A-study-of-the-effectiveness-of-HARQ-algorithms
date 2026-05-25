@@ -54,6 +54,11 @@ def parse_args():
         help="Comma list of modes to draw (default 'uncoded,coded').",
     )
     parser.add_argument(
+        "--crc", default=None,
+        help="Comma list of CRC presets to draw, e.g. '8,16,24a' "
+             "(default: all present in CSV).",
+    )
+    parser.add_argument(
         "--floor", type=float, default=1e-9,
         help="Lower y-limit / floor for zero MC values (default 1e-9).",
     )
@@ -83,6 +88,7 @@ def main():
         raise SystemExit("No data found in CSV file.")
 
     wanted_modes = [m for m in args.modes.split(",") if m]
+    wanted_crcs = [c for c in args.crc.split(",") if c] if args.crc else None
     show_analytic = not (args.measured_only or args.no_analytic)
 
     # groups[(crc, mode)][snr] = {"p_und", "n_und", "p_frame"}
@@ -92,6 +98,8 @@ def main():
     for row in rows:
         crc, mode = row["crc"], row["mode"]
         if mode not in wanted_modes:
+            continue
+        if wanted_crcs is not None and crc not in wanted_crcs:
             continue
         if crc not in crc_r:
             crc_r[crc] = int(row["r"])
@@ -121,19 +129,21 @@ def main():
             style = MODE_STYLE.get(mode, dict(linestyle="-", marker="o"))
 
             if show_analytic:
-                # Гладкая аналитическая кривая P_frame·2^-r.
+                # Гладкая теоретическая кривая P_frame·2^-r.
                 y = [series[s]["p_frame"] * (2.0 ** -r) for s in snr]
                 y = [v if v > 0 else args.floor for v in y]
                 ax.semilogy(snr, y, color=color, linewidth=1.8,
-                            linestyle=style["linestyle"],
-                            label=f"CRC-{crc.upper()}, {mode} (модель)")
-                # Реальные MC-точки только там, где были события.
+                            linestyle="-",
+                            label=f"CRC-{crc.upper()}, {mode} — теория")
+                # Реальные MC-измерения (линия с маркерами) там, где были события.
                 mx = [s for s in snr if series[s]["n_und"] > 0]
                 my = [series[s]["p_und"] for s in mx]
                 if mx:
-                    ax.scatter(mx, my, color=color, marker=style["marker"],
-                               s=45, edgecolors="black", linewidths=0.5,
-                               zorder=5)
+                    ax.semilogy(mx, my, color=color, linestyle="--",
+                                linewidth=1.0, marker=style["marker"],
+                                markersize=6, markeredgecolor="black",
+                                markeredgewidth=0.5, zorder=5,
+                                label=f"CRC-{crc.upper()}, {mode} — измерено")
             else:
                 # Только измерения: нули — на floor.
                 y = [series[s]["p_und"] if series[s]["p_und"] > 0 else args.floor
@@ -152,12 +162,6 @@ def main():
                         transform=ax.get_yaxis_transform(),
                         va="center", ha="left", fontsize=7,
                         color=CRC_COLORS.get(crc, "gray"))
-
-    if show_analytic:
-        # Поясняющая запись про маркеры.
-        ax.scatter([], [], color="gray", marker="o", s=45,
-                   edgecolors="black", linewidths=0.5,
-                   label="Monte-Carlo (валидация)")
 
     ax.set_xlabel("SNR, dB")
     ax.set_ylabel("P_undetected")
