@@ -51,9 +51,9 @@ CMake), и распараллелит задания (CRC × SNR) по пото�
 ## Запуск
 
 ```bash
-# Сравнение трёх CRC, обе кривые (uncoded + coded) на одном CSV
+# Сравнение четырёх CRC, обе кривые (uncoded + coded) на одном CSV
 ./build/crc_undetected_sim \
-    --blocks 500000 --crc 8,16,24a \
+    --blocks 5000000 --crc 3,8,16,24a \
     --snr 0,3,6,9,12,15,18 \
     > metrics/crc/crc_undetected.csv
 
@@ -67,9 +67,11 @@ CMake), и распараллелит задания (CRC × SNR) по пото�
 - `--blocks <count>` — число блоков на каждую точку (CRC × SNR), default `200000`.
 - `--seed <seed>` — seed PRNG.
 - `--info-bits <k>` — длина информационного сообщения в битах (default `512`).
-- `--crc <list>` — список CRC через запятую из `8`, `16`, `24a` (default `8,16,24a`).
-  `8` — CRC-8/CCITT (`x⁸+x²+x+1`), `16` — CCITT/3GPP CRC-16 (`x¹⁶+x¹²+x⁵+1`),
-  `24a` — 3GPP TS 38.212 CRC-24A.
+- `--crc <list>` — список CRC через запятую из `3`, `8`, `16`, `24a`
+  (default `3,8,16,24a`). `3` — CRC-3/GSM (`x³+x+1`), `8` — CRC-8/CCITT
+  (`x⁸+x²+x+1`), `16` — CCITT/3GPP CRC-16 (`x¹⁶+x¹²+x⁵+1`), `24a` — 3GPP
+  TS 38.212 CRC-24A. Чем меньше `r`, тем выше `P_undetected` и тем легче его
+  измерить: CRC-3 (потолок `2⁻³ = 0.125`) гладок уже на ~10⁴ блоков.
 - `--mode <uncoded|coded|both>` — какие режимы считать (default `both`).
 - `--cc-gens <octal list>` — генераторы свёрточного кода в восьмеричном виде
   (default `133,171,165` ⇒ rate 1/3). Число генераторов = знаменатель скорости.
@@ -91,10 +93,28 @@ crc,r,mode,snr_db,p_undetected,p_detected,p_correct,n_undetected,n_detected,n_co
 сразу после завершения (при Ctrl+C уже посчитанное не теряется). Plot-скрипт
 группирует строки по `(crc, mode)`, порядок не важен.
 
-## Построение графика
+## Построение графика и оценка до 10⁻⁹
+
+Прямой Монте-Карло не «видит» `P_undetected` ниже ~`10/blocks`: для CRC-24A это
+потребовало бы ~10⁹ блоков на точку (дни счёта). Но симулятор точно измеряет
+**частоту ошибки кадра** `P_frame = (n_detected + n_undetected)/total` (там тысячи
+событий), а необнаруженная ошибка — это «искажённый кадр случайно прошёл CRC»:
+
+```
+P_undetected ≈ P_frame · 2⁻ʳ
+```
+
+Поэтому plot-скрипт **по умолчанию** строит гладкие аналитические кривые
+`P_frame·2⁻ʳ` для всех CRC (включая CRC-24A) вплоть до 10⁻⁹ и ниже, а поверх
+накладывает реальные Монте-Карло точки `p_undetected` там, где события были
+(CRC-3/CRC-8 — плотно). Совпадение точек с кривыми подтверждает модель. Для такой
+картинки достаточно ~10⁵ блоков (быстро):
 
 ```bash
-# P_undetected (по умолчанию), все CRC и оба режима, ось до 10⁻⁹
+./build/crc_undetected_sim --blocks 100000 --crc 3,8,16,24a \
+    --snr 0,2,4,6,8,10,12,14,16,18,20 > metrics/crc/crc_undetected.csv
+
+# Аналитические кривые + MC-точки (по умолчанию), ось до 10⁻⁹
 python3 tools/plot_crc_undetected.py metrics/crc/crc_undetected.csv \
     --out metrics/crc/crc_undetected.png
 
@@ -102,14 +122,14 @@ python3 tools/plot_crc_undetected.py metrics/crc/crc_undetected.csv \
 python3 tools/plot_crc_undetected.py metrics/crc/crc_undetected.csv \
     --modes coded --out metrics/crc/crc_undetected_coded.png
 
-# Другая метрика
+# Только сырые измерения, без модели (нули падают на floor)
 python3 tools/plot_crc_undetected.py metrics/crc/crc_undetected.csv \
-    --metric detected --out metrics/crc/crc_detected.png
+    --measured-only --out metrics/crc/crc_undetected_mc.png
 ```
 
-По умолчанию: цвет = CRC, стиль линии = режим (uncoded — пунктир, coded —
-сплошная), нули заменяются на `--floor` (default `1e-9`) и так же задаётся нижняя
-граница оси Y. Для `P_undetected` рисуются пунктирные ориентиры `2⁻ʳ` каждого CRC.
+Оформление: цвет = CRC, стиль линии = режим (uncoded — пунктир, coded —
+сплошная). `--floor` (default `1e-9`) задаёт нижнюю границу оси Y. Пунктиром
+отмечены потолки `2⁻ʳ` каждого CRC.
 
 ## Замечания
 

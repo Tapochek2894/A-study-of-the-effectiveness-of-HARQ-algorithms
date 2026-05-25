@@ -57,6 +57,14 @@ class ConvolutionalCcCodec final : public IFecCodec {
   // Предвычисленная решётка: индекс [state * 2 + bit].
   std::vector<int> next_state_;
   std::vector<uint8_t> out_bits_;  // n_outputs_ бит подряд на каждый переход
+
+  // Рабочие буферы декодера, выделяются один раз и переиспользуются между
+  // вызовами (экземпляр кодека используется однопоточно). mutable — потому
+  // что Decode*/Viterbi помечены const по контракту IFecCodec.
+  mutable std::vector<double> vit_cur_;
+  mutable std::vector<double> vit_nxt_;
+  mutable std::vector<int> vit_prev_;
+  mutable std::vector<uint8_t> vit_dec_;
 };
 
 }  // namespace harq::fec

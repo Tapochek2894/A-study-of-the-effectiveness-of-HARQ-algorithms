@@ -67,6 +67,15 @@ ConvolutionalCcCodec::ConvolutionalCcCodec(const FecConfig& config)
       }
     }
   }
+
+  // Буферы декодера Витерби — один раз на весь срок жизни кодека.
+  const int total_steps = input_bits_ + memory_;
+  vit_cur_.resize(static_cast<std::size_t>(num_states_));
+  vit_nxt_.resize(static_cast<std::size_t>(num_states_));
+  vit_prev_.resize(static_cast<std::size_t>(total_steps) *
+                   static_cast<std::size_t>(num_states_));
+  vit_dec_.resize(static_cast<std::size_t>(total_steps) *
+                  static_cast<std::size_t>(num_states_));
 }
 
 int ConvolutionalCcCodec::input_bits_per_frame() const { return input_bits_; }
@@ -108,17 +117,15 @@ std::vector<uint8_t> ConvolutionalCcCodec::Viterbi(
   const int total_steps = input_bits_ + memory_;
   constexpr double kNegInf = -std::numeric_limits<double>::infinity();
 
-  std::vector<double> cur(static_cast<std::size_t>(num_states_), kNegInf);
-  std::vector<double> nxt(static_cast<std::size_t>(num_states_), kNegInf);
+  // Переиспользуем буферы кодека. Метрики cur инициализируем заново; prev/dec
+  // перезаписываются только для достижимых состояний, а обратный проход идёт
+  // лишь по достижимым ячейкам, поэтому очищать их целиком не нужно.
+  std::vector<double>& cur = vit_cur_;
+  std::vector<double>& nxt = vit_nxt_;
+  std::vector<int>& prev = vit_prev_;
+  std::vector<uint8_t>& dec = vit_dec_;
+  std::fill(cur.begin(), cur.end(), kNegInf);
   cur[0] = 0.0;  // кодер стартует из нулевого состояния
-
-  // Решения для обратного прохода: prev[t*S + state] и bit[t*S + state].
-  std::vector<int> prev(static_cast<std::size_t>(total_steps) *
-                            static_cast<std::size_t>(num_states_),
-                        -1);
-  std::vector<uint8_t> dec(static_cast<std::size_t>(total_steps) *
-                               static_cast<std::size_t>(num_states_),
-                           0);
 
   for (int t = 0; t < total_steps; ++t) {
     std::fill(nxt.begin(), nxt.end(), kNegInf);

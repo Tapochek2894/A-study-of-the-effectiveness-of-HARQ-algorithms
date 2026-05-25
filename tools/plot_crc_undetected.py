@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Plot CRC error probability vs SNR from the long-format CSV of crc_undetected_sim.
+"""Plot CRC undetected-error probability vs SNR from crc_undetected_sim CSV.
 
-CSV columns: crc,r,mode,snr_db,p_undetected,p_detected,p_correct,
-             n_undetected,n_detected,n_correct,total_blocks
+CSV columns (long format): crc,r,mode,snr_db,p_undetected,p_detected,p_correct,
+                           n_undetected,n_detected,n_correct,total_blocks
 
-По умолчанию строится P_undetected (вероятность НЕ обнаружить ошибку) для всех
-CRC и режимов на одном графике. Несколько CRC сравниваются цветом, режимы
-(uncoded/coded) — стилем линии.
+Прямой Монте-Карло не способен измерить P_undetected до 10⁻⁹ (для CRC-24A нужно
+~10⁹ блоков). Но он точно измеряет ЧАСТОТУ ОШИБКИ КАДРА
+  P_frame = (n_detected + n_undetected) / total,
+а необнаруженная ошибка возникает, когда искажённый кадр случайно проходит CRC:
+  P_undetected ≈ P_frame · 2⁻ʳ.
+Поэтому по умолчанию строятся гладкие АНАЛИТИЧЕСКИЕ кривые P_frame·2⁻ʳ для всех
+CRC (включая CRC-24A) до 10⁻⁹ и ниже, а поверх — РЕАЛЬНЫЕ Монте-Карло точки там,
+где события наблюдались (валидация модели).
 """
 
 import argparse
@@ -20,6 +25,7 @@ import matplotlib.pyplot as plt
 
 
 CRC_COLORS = {
+    "3": "tab:purple",
     "8": "tab:red",
     "16": "tab:green",
     "24a": "tab:blue",
@@ -31,45 +37,36 @@ MODE_STYLE = {
 
 
 def load_csv(path: Path):
-    # groups[(crc, mode)] -> list of (snr_db, value, r)
-    rows = []
     with path.open(newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if not row or "crc" not in row:
-                continue
-            rows.append(row)
-    return rows
+        return [row for row in csv.DictReader(f) if row and "crc" in row]
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Plot CRC undetected/detected probability vs SNR "
-        "(long-format CSV from crc_undetected_sim)."
+        description="Plot CRC undetected probability vs SNR "
+        "(analytic P_frame·2^-r + Monte-Carlo validation points)."
     )
-    parser.add_argument("csv_path", help="Path to CSV file from crc_undetected_sim")
+    parser.add_argument("csv_path", help="CSV from crc_undetected_sim")
     parser.add_argument("--out", default=None, help="Output image path")
     parser.add_argument("--title", default=None, help="Plot title")
     parser.add_argument(
-        "--metric",
-        choices=("undetected", "detected", "correct"),
-        default="undetected",
-        help="Which probability to plot (default undetected).",
-    )
-    parser.add_argument(
-        "--modes",
-        default="uncoded,coded",
+        "--modes", default="uncoded,coded",
         help="Comma list of modes to draw (default 'uncoded,coded').",
     )
     parser.add_argument(
-        "--floor",
-        type=float,
-        default=1e-9,
-        help="Floor for zero values on log scale / lower y-limit (default 1e-9).",
+        "--floor", type=float, default=1e-9,
+        help="Lower y-limit / floor for zero MC values (default 1e-9).",
     )
     parser.add_argument(
-        "--no-ceilings",
-        action="store_true",
+        "--measured-only", action="store_true",
+        help="Draw only measured Monte-Carlo points, no analytic curves.",
+    )
+    parser.add_argument(
+        "--no-analytic", action="store_true",
+        help="Alias of --measured-only.",
+    )
+    parser.add_argument(
+        "--no-ceilings", action="store_true",
         help="Do not draw 2^-r CRC undetected ceilings.",
     )
     return parser.parse_args()
@@ -86,21 +83,27 @@ def main():
         raise SystemExit("No data found in CSV file.")
 
     wanted_modes = [m for m in args.modes.split(",") if m]
-    col = f"p_{args.metric}"
+    show_analytic = not (args.measured_only or args.no_analytic)
 
-    # groups[(crc, mode)] -> dict(snr -> value), and crc -> r
+    # groups[(crc, mode)][snr] = {"p_und", "n_und", "p_frame"}
     groups = defaultdict(dict)
     crc_r = {}
     crc_order = []
     for row in rows:
-        crc = row["crc"]
-        mode = row["mode"]
+        crc, mode = row["crc"], row["mode"]
         if mode not in wanted_modes:
             continue
         if crc not in crc_r:
             crc_r[crc] = int(row["r"])
             crc_order.append(crc)
-        groups[(crc, mode)][float(row["snr_db"])] = float(row[col])
+        total = float(row["total_blocks"])
+        n_und = int(row["n_undetected"])
+        n_det = int(row["n_detected"])
+        groups[(crc, mode)][float(row["snr_db"])] = {
+            "p_und": float(row["p_undetected"]),
+            "n_und": n_und,
+            "p_frame": (n_und + n_det) / total if total else 0.0,
+        }
 
     if not groups:
         raise SystemExit("No matching (crc, mode) series to plot.")
@@ -108,45 +111,68 @@ def main():
     fig, ax = plt.subplots(figsize=(10, 6))
 
     for crc in crc_order:
-        color = CRC_COLORS.get(crc, None)
+        color = CRC_COLORS.get(crc)
+        r = crc_r[crc]
         for mode in wanted_modes:
             series = groups.get((crc, mode))
             if not series:
                 continue
             snr = sorted(series)
-            vals = [series[s] if series[s] > 0 else args.floor for s in snr]
             style = MODE_STYLE.get(mode, dict(linestyle="-", marker="o"))
-            ax.semilogy(
-                snr, vals, color=color, markersize=5,
-                label=f"CRC-{crc.upper()}, {mode}", **style,
-            )
+
+            if show_analytic:
+                # Гладкая аналитическая кривая P_frame·2^-r.
+                y = [series[s]["p_frame"] * (2.0 ** -r) for s in snr]
+                y = [v if v > 0 else args.floor for v in y]
+                ax.semilogy(snr, y, color=color, linewidth=1.8,
+                            linestyle=style["linestyle"],
+                            label=f"CRC-{crc.upper()}, {mode} (модель)")
+                # Реальные MC-точки только там, где были события.
+                mx = [s for s in snr if series[s]["n_und"] > 0]
+                my = [series[s]["p_und"] for s in mx]
+                if mx:
+                    ax.scatter(mx, my, color=color, marker=style["marker"],
+                               s=45, edgecolors="black", linewidths=0.5,
+                               zorder=5)
+            else:
+                # Только измерения: нули — на floor.
+                y = [series[s]["p_und"] if series[s]["p_und"] > 0 else args.floor
+                     for s in snr]
+                ax.semilogy(snr, y, color=color, markersize=5,
+                            label=f"CRC-{crc.upper()}, {mode}", **style)
 
     # Горизонтальные ориентиры 2^-r (потолок необнаружения каждого CRC).
-    if args.metric == "undetected" and not args.no_ceilings:
+    if not args.no_ceilings:
         for crc in crc_order:
             ceil = 2.0 ** (-crc_r[crc])
             if ceil >= args.floor:
                 ax.axhline(ceil, color=CRC_COLORS.get(crc, "gray"),
                            linestyle=":", linewidth=0.9, alpha=0.5)
-                ax.text(ax.get_xlim()[1], ceil, f" 2^-{crc_r[crc]}",
+                ax.text(0.995, ceil, f" 2^-{crc_r[crc]}",
+                        transform=ax.get_yaxis_transform(),
                         va="center", ha="left", fontsize=7,
                         color=CRC_COLORS.get(crc, "gray"))
 
-    titles = {
-        "undetected": "Вероятность НЕ обнаружить ошибку (P_undetected) vs SNR\n"
-                      "BPSK + Rayleigh, conv 1/3 Viterbi, k=512",
-        "detected": "P(CRC detected) vs SNR, BPSK + Rayleigh, k=512",
-        "correct": "P(correct) vs SNR, BPSK + Rayleigh, k=512",
-    }
+    if show_analytic:
+        # Поясняющая запись про маркеры.
+        ax.scatter([], [], color="gray", marker="o", s=45,
+                   edgecolors="black", linewidths=0.5,
+                   label="Monte-Carlo (валидация)")
+
     ax.set_xlabel("SNR, dB")
-    ax.set_ylabel(f"P_{args.metric}")
-    ax.set_title(args.title or titles[args.metric])
+    ax.set_ylabel("P_undetected")
+    default_title = (
+        "Вероятность НЕ обнаружить ошибку (P_undetected) vs SNR\n"
+        "BPSK + Rayleigh, conv 1/3 Viterbi, k=512  "
+        "(модель P_frame·2⁻ʳ + Monte-Carlo)"
+    )
+    ax.set_title(args.title or default_title)
     ax.set_ylim(bottom=args.floor)
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
-    ax.legend(loc="best", fontsize=9)
+    ax.legend(loc="lower left", fontsize=8, ncol=2)
 
     out_path = Path(args.out) if args.out else csv_path.with_name(
-        csv_path.stem + f"_{args.metric}.png"
+        csv_path.stem + "_undetected.png"
     )
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
