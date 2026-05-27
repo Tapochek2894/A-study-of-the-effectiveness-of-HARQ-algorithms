@@ -1,0 +1,18 @@
+CRC presets: 3(r=3,n_crc=515,n_cod=1563) 8(r=8,n_crc=520,n_cod=1578) 16(r=16,n_crc=528,n_cod=1602)
+Conv (native CC): rate=1/3, K=7, gens(oct)=133,171,165, decoder=viterbi(soft)
+Channel: BPSK + Rayleigh, block_size=auto(flat per frame), k=512, blocks/point=3000000 | OpenMP threads=16
+CRC 3 @ 12.0 dB done in 2935.7s | unc und=80382 det=683352 | cod und=10584 det=74506
+CRC 3 @ 9.0 dB done in 2981.4s | unc und=143092 det=1180406 | cod und=20777 det=147526
+CRC 8 @ 12.0 dB done in 2994.6s | unc und=2560 det=762883 | cod und=337 det=85248
+CRC 8 @ 9.0 dB done in 3011.5s | unc und=4406 det=1320218 | cod und=576 det=167644
+CRC 16 @ 12.0 dB done in 3015.8s | unc und=7 det=768758 | cod und=0 det=85558
+CRC 3 @ 0.0 dB done in 3032.4s | unc und=364638 det=2590870 | cod und=135550 det=960937
+CRC 3 @ 6.0 dB done in 3038.1s | unc und=229142 det=1813317 | cod und=40291 det=285485
+CRC 16 @ 9.0 dB done in 3048.2s | unc und=19 det=1327827 | cod und=2 det=168412
+CRC 8 @ 3.0 dB done in 3048.8s | unc und=9815 det=2665246 | cod und=2173 det=612756
+CRC 3 @ 3.0 dB done in 3057.7s | unc und=316676 det=2356019 | cod und=76118 det=538456
+CRC 16 @ 6.0 dB done in 3064.1s | unc und=27 det=2047629 | cod und=3 det=325576
+CRC 8 @ 6.0 dB done in 3070.9s | unc und=7243 det=2038041 | cod und=1251 det=324671
+CRC 8 @ 0.0 dB done in 3093.6s | unc und=11535 det=2944664 | cod und=3951 det=1093370
+CRC 16 @ 3.0 dB done in 3108.8s | unc und=38 det=2676148 | cod und=10 det=614897
+CRC 16 @ 0.0 dB done in 3112.4s | unc und=43 det=2956550 | cod und=17 det=1100894
