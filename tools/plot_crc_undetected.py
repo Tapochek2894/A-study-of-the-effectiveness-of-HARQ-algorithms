@@ -134,7 +134,7 @@ def main():
                 y = [v if v > 0 else args.floor for v in y]
                 ax.semilogy(snr, y, color=color, linewidth=1.8,
                             linestyle="-",
-                            label=f"CRC-{crc.upper()}, {mode} — теория")
+                            label=f"CRC-{crc.upper()} (теория)")
                 # Реальные MC-измерения (линия с маркерами) там, где были события.
                 mx = [s for s in snr if series[s]["n_und"] > 0]
                 my = [series[s]["p_und"] for s in mx]
@@ -143,7 +143,7 @@ def main():
                                 linewidth=1.0, marker=style["marker"],
                                 markersize=6, markeredgecolor="black",
                                 markeredgewidth=0.5, zorder=5,
-                                label=f"CRC-{crc.upper()}, {mode} — измерено")
+                                label=f"CRC-{crc.upper()} (эксперимент)")
             else:
                 # Только измерения: нули — на floor.
                 y = [series[s]["p_und"] if series[s]["p_und"] > 0 else args.floor
@@ -163,14 +163,9 @@ def main():
                         va="center", ha="left", fontsize=7,
                         color=CRC_COLORS.get(crc, "gray"))
 
-    ax.set_xlabel("SNR, dB")
-    ax.set_ylabel("P_undetected")
-    suffix = ("(модель P_frame·2⁻ʳ + Monte-Carlo)" if show_analytic
-              else "(прямой Monte-Carlo)")
-    default_title = (
-        "Вероятность НЕ обнаружить ошибку (P_undetected) vs SNR\n"
-        f"BPSK + Rayleigh, conv 1/3 Viterbi, k=512  {suffix}"
-    )
+    ax.set_xlabel("Отношение сигнал/шум (дБ)")
+    ax.set_ylabel("Вероятность не обнаружить ошибку")
+    default_title = "Моделирование для CRC различной длины в канале с замираниями"
     ax.set_title(args.title or default_title)
     ax.set_ylim(bottom=args.floor)
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
